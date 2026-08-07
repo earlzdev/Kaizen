@@ -1,0 +1,36 @@
+# Environment & secrets
+.env
+*.pem
+*.key
+
+# Personal data — NEVER commit these. Database dumps and profile exports
+# contain memories, chat history and everything Kaya knows about you.
+backups/
+exports/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+pgdata/
+
+# Model cache
+.cache/

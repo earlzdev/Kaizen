@@ -1,0 +1,6 @@
+# Dev-only dependencies: the unit-test toolchain (Step 0 of
+# ARCHITECTURE_REVIEW.md). NOT installed into the docker images — runtime
+# stays requirements.txt-only; run tests from any environment that has both:
+#   pip install -r requirements.txt -r requirements-dev.txt && pytest
+pytest>=8.3,<9
+pytest-asyncio>=0.25,<2

@@ -1,0 +1,111 @@
+// ============================================================================
+// FROZEN module contract (Phase 1) — proto/module.proto
+// ----------------------------------------------------------------------------
+// WHAT: The single gRPC contract EVERY v2 module implements (Наставник/mentor,
+//       Трекер/tracker, Психолог/therapist). Two RPCs:
+//         RegisterTools() -> the tools this module offers (name + JSON schema)
+//         CallTool(name, args, agent_id) -> the tool's result
+//       One contract for all modules, per docs/plans/kaizen-v2-rollout.md Phase 1.
+//
+// WHY the module is the gRPC SERVER and Brain the client (direction):
+//   The v2 data flow is agent -> Brain (MCP) -> module (gRPC). Brain dials
+//   modules, exactly as the Phase-0 skeleton already does (brain -> stub). So
+//   both RPCs are SERVED by the module; Brain is the client. "Модуль объявляет
+//   свои тулы Brain" is realised as a pull: on startup Brain calls each
+//   configured module's RegisterTools and the module DECLARES its tools in the
+//   reply. This avoids a module needing Brain's address/credentials to push,
+//   and keeps every module a passive, restart-safe server.
+//
+// WHY args/results are JSON strings, not typed messages:
+//   Tools have arbitrary, per-tool input schemas (the same JSON Schema the
+//   agent's Claude sees). Encoding each tool's args as a distinct protobuf
+//   message would mean regenerating the contract for every new tool — the
+//   opposite of "one frozen contract". A JSON string keeps the wire contract
+//   stable while tool schemas evolve freely inside it. This mirrors MCP, where
+//   `arguments` is free-form JSON and results are text content.
+//
+// WHY agent_id rides on CallTool:
+//   Brain authenticates the agent (MCP bearer token) and enforces the
+//   access-list BEFORE proxying. It then forwards the resolved agent identity
+//   so the module can attribute writes / apply per-agent logic. The module
+//   TRUSTS this field — it is set by Brain, never by the agent directly.
+//
+// HOW it maps to MCP (Brain is the bridge):
+//   module ToolSpec           -> MCP tools/list entry (name/description/inputSchema)
+//   MCP tools/call(name,args)  -> module CallTool(name, arguments_json, agent_id)
+//   module CallToolReply       -> MCP result { content:[{type:text}], isError }
+//
+// HOW to regenerate: edit this file, run `bash proto/gen.sh`, commit proto/gen/.
+// ============================================================================
+
+syntax = "proto3";
+
+package kaizen.module;
+
+// The one service every module exposes. Brain is the only client.
+service Module {
+  // Brain -> module, at Brain startup (and on demand). The module returns the
+  // tools it offers so Brain can advertise them to agents over MCP.
+  rpc RegisterTools(RegisterToolsRequest) returns (RegisterToolsReply);
+
+  // Brain -> module, per agent tool call. Brain has already authenticated the
+  // agent and checked the access-list; the module just executes.
+  rpc CallTool(CallToolRequest) returns (CallToolReply);
+}
+
+// Deliberately near-empty: the module knows its own identity and toolset. Kept
+// as a message (not google.protobuf.Empty) so fields can be added later without
+// changing the RPC signature — e.g. a Brain protocol version for negotiation.
+message RegisterToolsRequest {
+  // Optional: Brain's contract version, for future capability negotiation.
+  // Empty string means "unspecified" — modules must tolerate it.
+  string brain_version = 1;
+}
+
+message RegisterToolsReply {
+  // The module's stable name (e.g. "mentor"). Brain namespaces/logs by this.
+  string module = 1;
+  // Every tool the module offers right now.
+  repeated ToolSpec tools = 2;
+}
+
+// One tool the module offers. Field names mirror MCP's tool object so Brain can
+// forward them to agents with a 1:1 mapping.
+message ToolSpec {
+  // Unique tool name within the module, e.g. "start_quiz".
+  string name = 1;
+  // One-line human/LLM-facing description of what the tool does.
+  string description = 2;
+  // The tool's input JSON Schema, serialised as a JSON string. Brain passes
+  // this straight through as MCP `inputSchema`.
+  string input_schema_json = 3;
+  // OPTIONAL short usage note with a concrete example ("how to call me well"),
+  // as opposed to `description` ("what I am / when to call me"). Brain collects
+  // these and the agent renders them into its system prompt, so a tool ships
+  // its own usage guidance instead of it being copied into every agent's soul.
+  // Empty = nothing extra to say; most tools leave it empty on purpose (the
+  // block travels in every prompt, so only genuinely tricky tools fill it).
+  string usage = 4;
+}
+
+message CallToolRequest {
+  // Which tool to run (must match a ToolSpec.name from RegisterTools).
+  string name = 1;
+  // The tool arguments as a JSON object, serialised to a string. Shape is
+  // defined by that tool's input_schema_json.
+  string arguments_json = 2;
+  // The authenticated agent making the call, forwarded by Brain. Trusted:
+  // Brain sets it after auth + access-list enforcement; agents cannot forge it.
+  string agent_id = 3;
+}
+
+message CallToolReply {
+  // The tool's result rendered as text, mapped by Brain into MCP content
+  // `[{ "type": "text", "text": <content> }]`. JSON-in-text is fine — the
+  // agent's model reads it either way.
+  string content = 1;
+  // True if the tool failed (validation error, upstream failure). Brain
+  // forwards this as MCP `isError`, so the agent can react instead of treating
+  // an error string as a successful result.
+  bool is_error = 2;
+}

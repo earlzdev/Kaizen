@@ -1,0 +1,19 @@
+{
+  "_comment": "Кая's user-facing strings, ru — text the connector/delivery code sends the owner directly, or injects as a labeled note the model reads (voice_transcript_label, photo_note). See agents/kaya/strings.py.",
+  "voice_not_configured": "Голосовые пока не настроены (нет ключа SpeechKit).",
+  "voice_too_long": "Слишком длинное голосовое — я понимаю до минуты. Скажешь короче?",
+  "voice_transcribe_failed": "Не смогла расшифровать голосовое, попробуй ещё раз?",
+  "voice_no_words": "В голосовом не разобрала слов 🤔",
+  "voice_transcript_label": "[Голосовое сообщение, расшифровка]: {transcript}",
+  "photo_download_failed": "Не смогла скачать фото, попробуй ещё раз?",
+  "photo_note": "[Владелец прислал фото. Файл: {path} — открой его (Read) и посмотри перед ответом.]",
+  "unsupported_message": "Пока я понимаю текст, фото и голосовые.",
+  "turn_crashed": "Ой, у меня что-то сломалось на этом сообщении. Попробуй ещё раз?",
+  "reminder_prefix": "⏰ Напоминание: ",
+  "tracker_prefix": "🛠 Трекер: ",
+  "status_searching": "🔎 Ищу: {detail}",
+  "status_searching_generic": "🔎 Ищу в интернете…",
+  "status_reading": "📖 Читаю {host}…",
+  "status_reading_generic": "📖 Читаю страницу…",
+  "status_self_check": "🧐 Перепроверяю факты перед ответом…"
+}

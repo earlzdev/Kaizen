@@ -1,0 +1,19 @@
+{
+  "_comment": "Кая's user-facing strings, en — text the connector/delivery code sends the owner directly, or injects as a labeled note the model reads (voice_transcript_label, photo_note). See agents/kaya/strings.py.",
+  "voice_not_configured": "Voice messages aren't set up yet (no SpeechKit key).",
+  "voice_too_long": "That voice message is too long — I can handle up to a minute. Mind keeping it shorter?",
+  "voice_transcribe_failed": "Couldn't transcribe that voice message, mind trying again?",
+  "voice_no_words": "Couldn't make out any words in that voice message 🤔",
+  "voice_transcript_label": "[Voice message, transcribed]: {transcript}",
+  "photo_download_failed": "Couldn't download that photo, mind trying again?",
+  "photo_note": "[The owner sent a photo. File: {path} — open it (Read) and look before answering.]",
+  "unsupported_message": "Right now I can only handle text, photos, and voice messages.",
+  "turn_crashed": "Oops, something broke on my end for that message. Mind trying again?",
+  "reminder_prefix": "⏰ Reminder: ",
+  "tracker_prefix": "🛠 Tracker: ",
+  "status_searching": "🔎 Searching: {detail}",
+  "status_searching_generic": "🔎 Searching the web…",
+  "status_reading": "📖 Reading {host}…",
+  "status_reading_generic": "📖 Reading the page…",
+  "status_self_check": "🧐 Double-checking facts before replying…"
+}

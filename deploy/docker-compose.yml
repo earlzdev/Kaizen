@@ -1,0 +1,209 @@
+# =============================================================================
+# Kaizen Docker Compose
+# =============================================================================
+# v2 stack (the v1 monolith bot/context were removed in the Phase-9 cutover):
+#   postgres (shared instance), brain (MCP gateway + memory + access-list), the
+#   shared `tools` service (stateless utility tools) behind gRPC, and the kaya
+#   agent (now the default Telegram bot). Each stateful v2 service owns its
+#   own logical DB. (Private deployments can add more gRPC modules the same
+#   way `tools` is wired in.)
+#
+# pgvector stores/queries embeddings directly in Postgres (cosine similarity),
+# avoiding a separate vector DB. Each v2 service owns its own logical DB.
+#
+# NETWORKING — this BASE file is the PRODUCTION setup: NO service publishes a
+# host port. Services reach each other by name on the compose network
+# (brain:8772, postgres:5432, tools:9105, ...). The network still allows
+# OUTBOUND traffic (Кая polls Telegram, agents call the Anthropic API, the tools
+# reach the web), but NOTHING is reachable from the host or the internet. Кая is
+# a polling Telegram bot, so she needs no inbound at all.
+#
+# TWO WAYS TO RUN (see the Makefile for `make dev` / `make prod`):
+#   • DEV  (local, open ports for debug):
+#       docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   • PROD (closed — this base alone, or make it explicit):
+#       docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# The external backup service reaches Postgres via `docker compose exec -T
+# postgres pg_dumpall ...` (no published port needed) or by joining this network.
+# =============================================================================
+
+name: kaizen
+
+services:
+  postgres:
+    container_name: kaizen-postgres
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-learnbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-learnbot}
+      POSTGRES_DB: ${POSTGRES_DB:-learnbot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No published port — other services reach it at postgres:5432 on the compose
+    # network. (Opt into a localhost-only port via docker-compose.dev.yml.)
+    healthcheck:
+      # pg_isready checks if Postgres accepts connections — the bot waits for this.
+      # -d is required: without it pg_isready connects to a database named after
+      # the USER, so every check logs "FATAL: database ... does not exist" (the
+      # check still passes, but it floods the log every 5s).
+      # The fallbacks MUST match the environment: block above (they used to say
+      # kaizenbot/kaizen — with a sparse .env the check probed a nonexistent
+      # role and the container never went healthy).
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-learnbot} -d ${POSTGRES_DB:-learnbot}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # tools — the shared utility-tools service (top-level tools/, one dir per tool):
+  # search, headless browser, YouTube transcripts, flights, traffic. Stateless
+  # (no DB, no domain). Kept OUT of Brain so the flaky/heavy browser can't take
+  # the gateway down. Uses the Chromium the image installs. No published host port.
+  tools:
+    container_name: kaizen-tools
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile
+    restart: unless-stopped
+    command: python -m tools.main
+    env_file:
+      - ../.env
+    environment:
+      TOOLS_BIND_ADDR: "0.0.0.0:9105"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 9105), 3).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Probe every 2s while starting (Docker 25+), so `make up` doesn't
+      # idle a full interval waiting for a service that is already listening.
+      start_interval: 2s
+      start_period: 60s
+
+  # backup — dumps the WHOLE Postgres cluster (all DBs + roles), gzips,
+  # age-encrypts, and uploads to Yandex S3 on a schedule + on demand. Its own
+  # image (Dockerfile.backup) carries pg_dumpall + age + boto3. Internal API on
+  # :8781 (no published port) that the admin panel drives. Restore is the host
+  # script scripts/restore.sh (destructive, needs the offline age key).
+  backup:
+    container_name: kaizen-backup
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: postgres
+    healthcheck:
+      # python3, not python: this image is Dockerfile.backup (pgvector/Debian
+      # base), which installs python3 only — Debian creates no `python` alias.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8781/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Probe every 2s while starting (Docker 25+), so `make up` doesn't
+      # idle a full interval waiting for a service that is already listening.
+      start_interval: 2s
+      start_period: 30s
+
+  # brain — gated on HEALTHY modules (their listeners are bound), so the boot
+  # RegisterTools pass usually succeeds first try; Brain's background retry
+  # (Step 2) remains the safety net if a module flaps later. depends_on
+  # postgres because Brain owns its own DB.
+  brain:
+    container_name: kaizen-brain
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile
+    restart: unless-stopped
+    command: python -m brain.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tools:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: postgres
+      # Discover + proxy over gRPC: the shared `tools` service. (Private
+      # deployments can add more modules here, comma-separated.)
+      BRAIN_MODULES: "tools=tools:9105"
+      # Reminders whose owning agent has no delivery address fall back to Кая
+      # (the owner's primary channel) — never to "any agent" (Step 9).
+      DEFAULT_DELIVERY_AGENT_SLUG: "kaya"
+      # Phase 6: shared secret authenticating Brain -> agent delivery pushes.
+      # MUST match Кая's DELIVERY_TOKEN (both read it from .env).
+    healthcheck:
+      # /health answers only once the MCP site is up (and reports tool count).
+      # start_period covers DB bootstrap + embedder warmup + module discovery.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8772/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Probe every 2s while starting (Docker 25+), so `make up` doesn't
+      # idle a full interval waiting for a service that is already listening.
+      start_interval: 2s
+      start_period: 120s
+    # No published port — Кая reaches the MCP front door at brain:8772 on the
+    # compose network. For the admin panel / an EXTERNAL agent (Кузя), use a
+    # tunnel/VPN or docker-compose.dev.yml, never a public port.
+
+  # ---------------------------------------------------------------------------
+  # kaya — the v2 text agent: agents.core + Telegram connector + soul + her own
+  # local history DB. She reaches Brain over MCP for tools + memory, and receives
+  # Brain's delivery pushes (fired reminders). Now the DEFAULT Telegram bot —
+  # the v1 monolith bot was removed in the Phase-9 cutover, so she owns the token.
+  # ---------------------------------------------------------------------------
+  kaya:
+    container_name: kaizen-kaya
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile
+    restart: unless-stopped
+    command: python -m agents.kaya.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      brain:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: postgres
+      # Reach Brain's MCP front door by its compose service name.
+      BRAIN_URL: "http://brain:8772"
+      # For CLAUDE_BACKEND=cli: the `claude` CLI keeps its Max login here, on a
+      # persisted volume so it survives recreation. Harmless for the api backend.
+      CLAUDE_CONFIG_DIR: /root/.claude
+      # CRITICAL: stop the CLI from "migrating" itself into ~/.claude/local (the
+      # volume!) during login — that renames the system binary, and a later
+      # volume wipe then leaves NO claude at all ("CLI not found on PATH").
+      DISABLE_AUTOUPDATER: "1"
+    healthcheck:
+      # Кая's delivery receiver (/health on :8780) comes up LAST in her boot —
+      # after the DB bootstrap and the Brain handshake — so it doubles as a
+      # whole-process liveness probe. Long start_period: a FIRST-ever boot
+      # waits for the owner's `make approve` before the receiver starts.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8780/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Probe every 2s while starting (Docker 25+), so `make up` doesn't
+      # idle a full interval waiting for a service that is already listening.
+      start_interval: 2s
+      start_period: 300s
+    volumes:
+      # Persist the claude CLI (Max) login. One-time: `docker compose exec kaya claude`.
+      - claude-auth:/root/.claude
+      # Persist Кая's enrolled Brain token (/state/brain_token) across recreation.
+      - kaya-state:/state
+
+volumes:
+  pgdata:
+  claude-auth:
+  kaya-state:

@@ -1,0 +1,34 @@
+# =============================================================================
+# PROD overlay — docker-compose.prod.yml
+# =============================================================================
+# WHAT: The production setup. It publishes NO host ports (it inherits the base,
+#       which is already fully closed — services talk only over the compose
+#       network) and adds production hardening: capped, rotated container logs so
+#       a chatty service can never fill the disk.
+#
+# WHY it exists even though the base is already closed: it's the explicit,
+#       named prod entrypoint (symmetry with docker-compose.dev.yml), and the one
+#       place to put prod-only settings. Do NOT combine it with the dev overlay.
+#
+# WHY log rotation here (not the base): dev runs interactively and you want full
+#       logs; a long-running prod host wants bounded logs (10 MB × 3 files per
+#       container) so months of uptime don't silently eat the disk.
+#
+# HOW to run:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#   (or `make prod`)
+# =============================================================================
+
+x-prod-logging: &prod-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  postgres:   { <<: *prod-logging }
+  tools:      { <<: *prod-logging }
+  brain:      { <<: *prod-logging }
+  kaya:       { <<: *prod-logging }
+  backup:     { <<: *prod-logging }

@@ -1,0 +1,50 @@
+# =============================================================================
+# DEV overlay — docker-compose.dev.yml
+# =============================================================================
+# WHAT: Local development + debug. Publishes host ports so you can hit the admin
+#       panel, psql, and the gRPC modules directly from
+#       your machine (and grpcurl the modules). The BASE file publishes nothing;
+#       this overlay is the ONLY place ports are opened.
+#
+# WHY a separate overlay (not in the base): the base is the production setup —
+#       fully closed. Dev deliberately opens ports for convenience. Because
+#       Compose can ADD ports via an overlay but can't easily REMOVE them, the
+#       safe direction is "base = closed, dev = opens" — never the reverse.
+#
+# WHY every port binds 127.0.0.1 (Step 8 of ARCHITECTURE_REVIEW.md): these used
+#       to bind 0.0.0.0 — on a laptop that means anyone on the same Wi-Fi could
+#       reach Postgres (with default credentials) and every service. Loopback
+#       keeps the dev convenience (localhost URLs below work unchanged) with
+#       zero LAN exposure. If another DEVICE must reach a port, add an explicit
+#       LAN binding consciously — don't widen these.
+#
+# HOW to run:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#   (or `make up dev`)
+#
+# Then on this machine:
+#   • Admin panel:      http://localhost:8772/admin/panel
+#   • psql:             psql -h localhost -U <POSTGRES_USER> -d brain
+#   • grpcurl a module: grpcurl -plaintext localhost:9105 list   (tools), etc.
+# =============================================================================
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  brain:
+    ports:
+      - "127.0.0.1:8772:8772"          # MCP front door + admin panel
+
+  tools:
+    ports:
+      - "127.0.0.1:9105:9105"          # gRPC Module (debug)
+
+  kaya:
+    ports:
+      - "127.0.0.1:8780:8780"          # delivery receiver (debug)
+
+  backup:
+    ports:
+      - "127.0.0.1:8781:8781"          # backup API (debug)

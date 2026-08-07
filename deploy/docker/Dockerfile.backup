@@ -1,0 +1,29 @@
+# =============================================================================
+# Backup service image — Dockerfile.backup
+# =============================================================================
+# WHAT: The image for the `backup` service. Based on the SAME Postgres 16 image
+#       the cluster runs, so pg_dumpall / psql are version-matched to the server
+#       (a mismatched client can refuse to dump a newer server). Adds Python +
+#       age (encryption) + boto3 (S3) + aiohttp/pydantic-settings.
+#
+# WHY not the main app image: that image is aiogram/anthropic/torch-heavy and has
+#       no pg client; the backup service needs the postgres tools + age instead.
+#       A small dedicated image keeps concerns (and size) separate.
+# =============================================================================
+
+FROM pgvector/pgvector:pg16
+
+# pg_dumpall/psql come with the base image. Add Python, age, and pip deps.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-pip age gzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# PEP 668: this is a container, installing into the system env is fine.
+RUN pip3 install --no-cache-dir --break-system-packages \
+        boto3 aiohttp "pydantic-settings>=2.7,<3"
+
+WORKDIR /app
+COPY infra/__init__.py ./infra/__init__.py
+COPY infra/backup/ ./infra/backup/
+
+CMD ["python3", "-m", "infra.backup.main"]

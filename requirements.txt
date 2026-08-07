@@ -1,0 +1,64 @@
+# Bot framework (async Telegram bot)
+aiogram>=3.15,<4
+
+# AI — Anthropic Claude API
+anthropic>=0.50,<1
+
+# HTTP server/client for the v2 services: Brain's MCP server (brain/server.py)
+# and Agent Core's MCP client to Brain (agents/core/mcp_client.py). Pulled in
+# transitively by aiogram today, but the v2 services depend on it directly, so
+# it is pinned explicitly here.
+aiohttp>=3.9,<4
+
+# gRPC — the v2 transport between Brain and modules.
+# grpcio-tools is needed only to regenerate proto/gen/ via proto/gen.sh; it is
+# kept here so a fresh clone can run codegen without hunting for the version.
+# Floor pinned to 1.83: the committed proto/gen/*_grpc.py embeds a hard
+# version guard (GRPC_GENERATED_VERSION = 1.83.0) and raises at import on an
+# older grpcio. Bump this floor whenever you regenerate against a newer grpcio.
+grpcio>=1.83,<2
+grpcio-tools>=1.83,<2
+# protobuf arrives transitively via grpcio-tools, but the committed
+# proto/gen/*_pb2.py embed the SAME kind of hard guard the _grpc.py files do
+# ("gencode 7.35.1 / runtime 6.x" raises VersionError at import). Leaving it
+# unpinned meant a fresh install could resolve an older protobuf and every
+# service would die on its first import of the contract — which is exactly what
+# happened building examples/dummy-project. Bump this floor whenever you
+# regenerate. Any project integrating via infra/wardenkit needs the same floor.
+protobuf>=7.35,<8
+
+# Database
+asyncpg>=0.30,<1
+sqlalchemy[asyncio]>=2.0,<3
+pgvector>=0.3,<1
+
+# Embeddings (local model, no API calls needed)
+sentence-transformers>=3.3,<4
+
+# PDF parsing
+pymupdf>=1.25,<2
+
+# Web search and content extraction (for auto-research)
+# ddgs is the maintained successor of duckduckgo-search (the old lib gets
+# 403-blocked by DDG's current endpoints)
+ddgs>=9.14,<10
+beautifulsoup4>=4.12,<5
+httpx>=0.27,<1
+
+# Headless browser so Kaya can render JavaScript pages (Yandex Maps routes /
+# distances, any JS-only site). Chromium itself is installed in the Dockerfile.
+playwright>=1.44,<2
+
+# Pull YouTube captions (no API key) so Kaya can "watch" a video by reading its
+# transcript — for reviews, tutorials, talks the user points her at.
+youtube-transcript-api>=0.6,<1
+
+# Scheduling (daily reviews, reminders)
+apscheduler>=3.10,<4
+
+# Settings management + typed edges. pydantic itself is a DIRECT dependency
+# (brain/api_models.py, infra/modkit/events.py), not just transitive via
+# pydantic-settings/aiogram — pinned explicitly like every other direct dep.
+pydantic>=2.7,<3
+pydantic-settings>=2.7,<3
+alembic>=1.13,<2

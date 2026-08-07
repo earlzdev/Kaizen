@@ -1,0 +1,24 @@
+# Keeps the build context (COPY . . in the Dockerfiles) free of secrets,
+# repo noise and dev-only files. NOTE: agents/*/soul.md and cliches.json are
+# runtime DATA — never exclude *.md globally.
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.env
+.env.*
+!.env.example
+.DS_Store
+pgdata
+.claude
+# Dev/docs-only — not needed inside any image. (deploy/ deliberately stays IN
+# the context: the classic builder requires the Dockerfile to live inside it.)
+tests
+docs
+exports
+README.md
+ARCHITECTURE_REVIEW.md
+requirements-dev.txt
+pytest.ini

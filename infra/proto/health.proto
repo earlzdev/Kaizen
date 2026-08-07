@@ -1,0 +1,45 @@
+// ============================================================================
+// Phase-0 "hello" contract — proto/health.proto
+// ----------------------------------------------------------------------------
+// WHAT: The smallest possible gRPC service that proves the Brain -> module
+//       pipe works end to end. One RPC: Ping(agent_id) -> pong text.
+//
+// WHY it exists (and why it is NOT the real module contract yet): Phase 0 of
+//   the v2 rollout only has to prove the gRPC transport, codegen, and
+//   docker-compose wiring are correct. The real module contract
+//   (RegisterTools / CallTool, per docs/plans/kaizen-v2-rollout.md Phase 1)
+//   is deliberately frozen LATER, once everything downstream depends on it.
+//   Shipping a throwaway HealthService now lets us stand up the skeleton
+//   without prematurely committing to that contract.
+//
+// HOW it is used: `modules/stub` serves HealthService; `brain` is the gRPC
+//   client that dials it on startup and logs the pong. Generated Python lands
+//   in proto/gen/ via proto/gen.sh.
+// ============================================================================
+
+syntax = "proto3";
+
+package kaizen.health;
+
+// A stand-in for the real module. Every module in v2 will eventually also
+// expose the Phase-1 module contract; HealthService is just the liveness probe
+// the Brain uses to confirm a module is reachable over gRPC.
+service HealthService {
+  // Brain -> module. `agent_id` is echoed back so we can see that the Brain's
+  // per-agent identity propagation (the thing that carries authz downstream in
+  // later phases) is threaded through even in this trivial call.
+  rpc Ping(PingRequest) returns (PingReply);
+}
+
+message PingRequest {
+  // Who is (nominally) asking. In Phase 0 this is just echoed; from Phase 2 on
+  // it is the real authenticated agent identity the Brain forwards to modules.
+  string agent_id = 1;
+}
+
+message PingReply {
+  // Human-readable liveness string, e.g. "stub: pong for agent=kaya".
+  string message = 1;
+  // The module's own name, so the Brain can log WHICH module answered.
+  string module = 2;
+}

@@ -1,0 +1,5 @@
+{
+  "_comment": "Agent Core's user-facing strings, ru — text a connector hands straight to a human, never through the model. See agents/core/strings.py.",
+  "quota_exhausted": "⏳ Подписка Claude исчерпана.{when} Повторю, когда квота вернётся — просто напиши ещё раз.",
+  "quota_reset_at": " Сброс в {reset_at}."
+}
