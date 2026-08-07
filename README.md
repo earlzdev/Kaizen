@@ -1,6 +1,6 @@
 # Kaizen
 
-![Kaizen](kaizen.jpeg)
+<img src="kaizen.jpeg" alt="Kaizen" width="220">
 
 *Kaizen* (改善) is Japanese for **continuous improvement** — the idea that
 lasting progress comes from small improvements accumulated over time.
