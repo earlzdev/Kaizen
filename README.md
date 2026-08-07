@@ -1,5 +1,7 @@
 # Kaizen
 
+![Kaizen](kaizen.jpeg)
+
 *Kaizen* (改善) is Japanese for **continuous improvement** — the idea that
 lasting progress comes from small improvements accumulated over time.
 
