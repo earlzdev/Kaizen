@@ -68,18 +68,16 @@ A **present-but-corrupt** file (bad JSON) is a different, smaller problem:
 crashing, since losing the self-check's style rules is not worth taking the
 agent down for.
 
-**Known gap:** this covers the agent's own text, not every tool it calls.
-Several tools hardcode Russian regardless of the agent's language: `weather`
-requests Open-Meteo geocoding with `language=ru` and maps conditions to
-Russian words ("ясно", "пасмурно"); `traffic_score`/`route_time` scrape
-Yandex Maps and return its Russian-locale output as-is ("средняя
-загруженность", "1 ч 42 мин"); `cheapest_flights` resolves city names with
-`locale=ru` and prices only in RUB; `youtube_transcript` prefers a Russian
-caption track over an English one when both exist (`_PREFERRED_LANGS =
-["ru", "en"]`). An `en` agent will see (and may echo) Russian text — or
-rubles — from any of these. Fixing it means reworking each tool's upstream
-request/output, not a locale file; tracked as a gap, not solved by this
-system.
+This covers the agent's own text; tools are separate (they have no Brain
+access and don't know which agent is calling), so each tool that produces
+language-sensitive output takes its own optional `language` argument
+(`en`/`ru`, default `en`) instead: `weather`, `traffic_score`, `route_time`,
+`cheapest_flights`, and `youtube_transcript` all support it — pass a
+`language` matching whatever you're currently replying in and the tool
+picks the matching output (`cheapest_flights` also switches currency,
+USD/RUB). The underlying data source stays Russian where it has to
+(Yandex Maps' city lookups and scraped page format, for instance) — only
+each tool's own rendered output is bilingual.
 
 ### Adding a language to an agent
 

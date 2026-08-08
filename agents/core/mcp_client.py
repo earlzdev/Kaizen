@@ -16,8 +16,8 @@
 #       network round trip on every turn.
 #
 # WHY recall is cached with a short TTL (the plan's explicit latency risk):
-#       "recall теперь сетевой вызов перед каждым ответом — кэшировать на стороне
-#       Agent Core". Memory changes slowly relative to a burst of messages, so we
+#       "recall is now a network call before every reply — cache it on the
+#       Agent Core side". Memory changes slowly relative to a burst of messages, so we
 #       cache recall results per normalized query for RECALL_TTL_SECONDS. This
 #       trades a little staleness for skipping a network+embedding round trip on
 #       every reply. The cache is invalidated whenever the agent WRITES memory

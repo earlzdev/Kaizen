@@ -1,8 +1,8 @@
 // ============================================================================
 // FROZEN module contract (Phase 1) — proto/module.proto
 // ----------------------------------------------------------------------------
-// WHAT: The single gRPC contract EVERY v2 module implements (Наставник/mentor,
-//       Трекер/tracker, Психолог/therapist). Two RPCs:
+// WHAT: The single gRPC contract EVERY v2 module implements (e.g. a learning
+//       module, a project tracker, a therapist module). Two RPCs:
 //         RegisterTools() -> the tools this module offers (name + JSON schema)
 //         CallTool(name, args, agent_id) -> the tool's result
 //       One contract for all modules, per docs/plans/kaizen-v2-rollout.md Phase 1.
@@ -10,10 +10,10 @@
 // WHY the module is the gRPC SERVER and Brain the client (direction):
 //   The v2 data flow is agent -> Brain (MCP) -> module (gRPC). Brain dials
 //   modules, exactly as the Phase-0 skeleton already does (brain -> stub). So
-//   both RPCs are SERVED by the module; Brain is the client. "Модуль объявляет
-//   свои тулы Brain" is realised as a pull: on startup Brain calls each
-//   configured module's RegisterTools and the module DECLARES its tools in the
-//   reply. This avoids a module needing Brain's address/credentials to push,
+//   both RPCs are SERVED by the module; Brain is the client. "A module
+//   announces its tools to Brain" is realised as a pull: on startup Brain
+//   calls each configured module's RegisterTools and the module DECLARES its
+//   tools in the reply. This avoids a module needing Brain's address/credentials to push,
 //   and keeps every module a passive, restart-safe server.
 //
 // WHY args/results are JSON strings, not typed messages:

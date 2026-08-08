@@ -2,9 +2,9 @@
 # Brain access-list — brain/access.py
 # =============================================================================
 # WHAT: Decides whether a given agent may call a given (module, tool). This is
-#       the "стережёт доступ" half of Brain from the plan.
+#       the "guards access" half of Brain from the plan.
 #
-# WHY allow-by-default, deny точечно (Phase 2 rule): every agent may call every
+# WHY allow-by-default, deny surgically (Phase 2 rule): every agent may call every
 #       tool UNLESS a rule says otherwise. A rule in access_rules is an
 #       EXCEPTION carved out of that default. This keeps the common case
 #       (a trusted agent) zero-config, and lets you clip a specific agent's

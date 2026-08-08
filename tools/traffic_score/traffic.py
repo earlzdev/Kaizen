@@ -1,8 +1,9 @@
 # =============================================================================
 # Traffic Service — app/services/traffic.py
 # =============================================================================
-# WHAT: The current traffic-jam score ("пробки N баллов", 0-10) for a Russian
-#       city, read live from Yandex Maps through the headless browser.
+# WHAT: The current traffic-jam score (Yandex's own "N points" scale, 0-10)
+#       for a Russian city, read live from Yandex Maps through the headless
+#       browser.
 #
 # WHY a dedicated service with a city→geo-id map:
 #   Yandex shows the score only on a city's own Maps page, and — verified by
@@ -10,7 +11,7 @@
 #   the name in it (a wrong id silently shows a different city's traffic). So we
 #   can't just paste the city name: we map the name to the correct geo-id, open
 #   that page in a real browser (the score is rendered by JavaScript), and read
-#   the "пробки N баллов" it draws.
+#   the "пробки N баллов" ("N points of congestion") it draws.
 #
 # HOW: city_score(name) → (score, label, url) or None if the city isn't mapped
 #      or the page didn't render. The scores were spot-checked live (Ufa 2,
@@ -72,13 +73,19 @@ _CITY_GEO: dict[str, tuple[int, str]] = {
 
 _SCORE_RE = re.compile(r"пробк[а-я]*\s*(\d+)\s*балл", re.IGNORECASE)
 
+_LABELS = {
+    "en": {"low": "light traffic", "medium": "moderate traffic", "high": "heavy traffic"},
+    "ru": {"low": "свободно", "medium": "средняя загруженность", "high": "серьёзные пробки"},
+}
 
-def _label(score: int) -> str:
+
+def _label(score: int, language: str = "en") -> str:
+    labels = _LABELS.get(language, _LABELS["en"])
     if score <= 3:
-        return "свободно"
+        return labels["low"]
     if score <= 6:
-        return "средняя загруженность"
-    return "серьёзные пробки"
+        return labels["medium"]
+    return labels["high"]
 
 
 class TrafficService:
@@ -94,7 +101,7 @@ class TrafficService:
     def _normalise(city: str) -> str:
         return city.strip().lower().replace("ё", "е")
 
-    async def city_score(self, city: str) -> tuple[int, str, str] | None:
+    async def city_score(self, city: str, language: str = "en") -> tuple[int, str, str] | None:
         """(score 0-10, label, url) for a mapped city, or None."""
         key = self._normalise(city)
         geo = _CITY_GEO.get(key)
@@ -110,4 +117,4 @@ class TrafficService:
         if not m:
             return None
         score = int(m.group(1))
-        return score, _label(score), url
+        return score, _label(score, language), url

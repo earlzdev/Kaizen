@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # Cap the returned text so a two-hour video can't blow up the prompt.
 _MAX_CHARS = 16_000
 
-# Prefer Russian, then English, then whatever the video has.
-_PREFERRED_LANGS = ["ru", "en"]
+# Preference order per requested language, then whatever the video has.
+_PREFERRED_LANGS = {"en": ["en", "ru"], "ru": ["ru", "en"]}
 
 
 class YouTubeService:
@@ -47,7 +47,7 @@ class YouTubeService:
                 return m.group(1)
         return None
 
-    async def transcript(self, url_or_id: str) -> str | None:
+    async def transcript(self, url_or_id: str, language: str = "en") -> str | None:
         """Return the video's transcript as text, or None if unavailable."""
         vid = self.video_id(url_or_id)
         if vid is None:
@@ -59,9 +59,11 @@ class YouTubeService:
             logger.warning("youtube-transcript-api not installed — transcripts unavailable")
             return None
 
+        preferred = _PREFERRED_LANGS.get(language, _PREFERRED_LANGS["en"])
+
         def _fetch() -> str | None:
             try:
-                items = YouTubeTranscriptApi.get_transcript(vid, languages=_PREFERRED_LANGS)
+                items = YouTubeTranscriptApi.get_transcript(vid, languages=preferred)
             except Exception:
                 # Try again letting the library pick ANY available language.
                 try:

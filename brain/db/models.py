@@ -1,8 +1,8 @@
 # =============================================================================
 # Brain data schema (Phase 1) — brain/db/models.py
 # =============================================================================
-# WHAT: The frozen schema of Brain's own database — the "общая память + реестр
-#       агентов + access-list + провенанс" from docs/plans/kaizen-v2-rollout.md
+# WHAT: The frozen schema of Brain's own database — the "shared memory + agent
+#       registry + access-list + provenance" from docs/plans/kaizen-v2-rollout.md
 #       Phase 1. Five tables: agents, access_rules, facts, profile, reminders,
 #       plus change_log for provenance.
 #
@@ -16,7 +16,7 @@
 #   owner), actor is recorded.
 #
 # WHY the access-list is allow-by-default with deny rows:
-#   Phase 2 enforces "allow-by-default, deny точечно". An AccessRule is an
+#   Phase 2 enforces "allow-by-default, deny surgically". An AccessRule is an
 #   EXCEPTION carved out of the default: no row for (agent, tool) ⇒ allowed. A
 #   row with allowed=false denies. Scope widens from tool -> module -> nothing:
 #   module=null,tool=null is a blanket rule for the agent; module set + tool
@@ -96,7 +96,7 @@ class AccessRule(Base):
       module=NULL, tool=NULL -> blanket rule for the agent
       module set, tool=NULL  -> whole-module rule
       module set, tool set   -> single-tool rule
-    `allowed=false` is the common case (deny точечно); `allowed=true` lets an
+    `allowed=false` is the common case (a surgical deny); `allowed=true` lets an
     allow override a broader deny in later, more nuanced enforcement."""
 
     __tablename__ = "access_rules"

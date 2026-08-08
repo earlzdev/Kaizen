@@ -6,7 +6,7 @@
 #       DB-backed history lives WITH each agent (its own DB, per the plan).
 #
 # WHY a seam, not a baked-in table: the plan gives each agent its own local DB
-#       ("история диалога, своя БД агента"), separate from Brain's SHARED memory
+#       ("dialogue history, the agent's own DB"), separate from Brain's SHARED memory
 #       about the owner. Agent Core must not dictate that storage — Кая persists
 #       to Postgres, a test uses InMemoryHistory, a future agent could use
 #       something else. The lib only needs load/append/clear.

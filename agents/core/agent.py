@@ -69,18 +69,18 @@ SEARCH_TOOLS = {"find_online", "read_page", "WebSearch", "WebFetch"}
 
 # Drafts at least this long get the style-only gate even without search: long
 # answers are where the model slides back into its default AI register. Short
-# replies skip it — gating "ок, поставила" would double latency for nothing.
+# replies skip it — gating "ok, done" would double latency for nothing.
 STYLE_GATE_MIN_CHARS = 300
 
 # Quick-lookup exemption (owner's call, 2026-07-29): a SHORT answer from a
 # SHALLOW search (this many ops or fewer) skips the fact-check — re-verifying
-# «какая погода» doubles latency for one low-stakes claim the model just read.
+# «what's the weather» doubles latency for one low-stakes claim the model just read.
 # Deep research or a long answer still always gets the full pass.
 QUICK_LOOKUP_MAX_OPS = 3
 
 # How many search operations a turn must have made before the owner is TOLD
-# that facts are being re-checked (owner's call, 2026-07-29): «перепроверяю
-# факты» on a turn that did one lookup — or none at all, when only the style
+# that facts are being re-checked (owner's call, 2026-07-29): «double-checking
+# the facts» on a turn that did one lookup — or none at all, when only the style
 # gate ran — reads as random noise. The gate itself still runs; only the
 # status line is gated, so the owner sees it exactly when a real research
 # turn is genuinely being verified.
@@ -159,7 +159,7 @@ class Agent:
         framing is deliberately shared.
 
         WHY recall runs on the NOTE and not on the whole wake prompt: the note
-        is the actual subject ("владелец прилетел — спроси, как долетел"), while
+        is the actual subject ("the owner landed — ask how the flight went"), while
         the surrounding template is scaffolding that would only add noise to a
         semantic search.
 

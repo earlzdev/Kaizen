@@ -12,7 +12,7 @@
 #         - the Agent facade (agent.py) that ties it together: reply(text)->text
 #
 # WHY a library and not code inside each agent: the plan builds ONE agent core
-#       and reuses it (principle 3 — Каю переносим, а не переписываем). An agent
+#       and reuses it (principle 3 — we port Кая over, we don't rewrite her). An agent
 #       becomes: agents.core + a connector (Telegram/voice) + a soul + a token.
 #       Everything agent-specific is injected; nothing app/* is imported, so the
 #       lib is independent of the v1 monolith and of any one agent.
@@ -27,7 +27,7 @@
 #       brain   = BrainMCPClient(brain_url, agent_token)
 #       agent   = Agent(soul=load_soul(path), llm=client, brain=brain,
 #                       history=my_history)
-#       reply   = await agent.reply("привет")
+#       reply   = await agent.reply("hi")
 # =============================================================================
 
 from agents.core.agent import Agent

@@ -13,7 +13,7 @@
 #       proto): Brain and every agent import the same class, so a field change
 #       is a one-place change both sides see.
 #
-# WHY the event carries RAW text (no "⏰ Напоминание:" prefix): presentation
+# WHY the event carries RAW text (no "⏰ Reminder:" prefix): presentation
 #       belongs to the agent that talks to the owner, not to Brain's scheduler.
 #       The receiver decides how a reminder reads in its medium (Telegram text
 #       for Кая; a future voice agent would SAY it differently).

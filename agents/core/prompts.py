@@ -38,7 +38,7 @@ CURRENT_TIME_TEMPLATE = "Current date and time: {now} ({tz})"
 # the agent runs a normal turn seeded with the note it left itself.
 #
 # WHY it must say the owner can't see it: without that, the model treats the
-# note as an incoming message and answers IT («хорошо, спрошу!») instead of
+# note as an incoming message and answers IT («okay, I'll ask!») instead of
 # doing the thing. The note is an instruction to itself, not something to
 # acknowledge — and definitely not something to relay verbatim.
 #
@@ -149,7 +149,7 @@ When the owner asks you to find, look up, compare, or check something online:
 VERIFY_OK_MARKER = "VERIFIED-OK"
 # When the checker rewrites the draft, the final answer must start after this
 # marker; the Agent STRIPS everything before it. This is the mechanical seam
-# that keeps checker commentary («убираю последний абзац...») from ever
+# that keeps checker commentary («removing the last paragraph...») from ever
 # reaching the owner — prompt obedience alone proved insufficient.
 FINAL_MARKER = "FINAL:"
 
@@ -177,8 +177,8 @@ operations to verify or correct it.
   about what you changed, why, or that a check/draft existed."""
 
 # The style-only gate for turns that did NOT search (no facts to re-check).
-# Only long drafts get it — short replies rarely slip, and gating every "ок,
-# поставила" would double casual-chat latency for nothing.
+# Only long drafts get it — short replies rarely slip, and gating every "ok,
+# done" would double casual-chat latency for nothing.
 STYLE_REQUEST_TEMPLATE = f"""[Automatic self-check — the owner does NOT see this message or your draft above yet.]
 Re-read your draft answer. {_STYLE_CLAUSE}
 - If the draft is clean, reply with exactly "{VERIFY_OK_MARKER}" and nothing else.

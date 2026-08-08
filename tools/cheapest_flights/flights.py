@@ -13,7 +13,7 @@
 #   independent behaviour the user asked for.
 #
 # HOW it works:
-#   1. resolve_city() turns "Уфа" / "Moscow" into an IATA code (UFA / MOW).
+#   1. resolve_city() turns "Lisbon" / "Уфа" into an IATA code (LIS / UFA).
 #      This endpoint needs NO token, so city resolution always works.
 #   2. cheapest() calls prices_for_dates across a window of departure dates and
 #      returns the cheapest concrete options (date + price + airline). This
@@ -76,17 +76,19 @@ class FlightsService:
     def has_token(self) -> bool:
         return bool(self._token)
 
-    async def resolve_city(self, name: str) -> tuple[str, str] | None:
+    async def resolve_city(self, name: str, language: str = "en") -> tuple[str, str] | None:
         """City name (any language) → (IATA code, canonical name). Token-free.
 
         Returns None if nothing matched, so the caller can tell the user the
-        place wasn't recognised rather than silently guessing.
+        place wasn't recognised rather than silently guessing. `language`
+        only affects which language the canonical name comes back in — the
+        input city name itself is understood in whatever language it's given.
         """
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
                 resp = await client.get(
                     _AUTOCOMPLETE_URL,
-                    params={"term": name, "locale": "ru", "types[]": "city"},
+                    params={"term": name, "locale": language, "types[]": "city"},
                 )
                 resp.raise_for_status()
                 results = resp.json()
@@ -107,6 +109,7 @@ class FlightsService:
         days_window: int = 5,
         one_way: bool = True,
         max_offers: int = 6,
+        language: str = "en",
     ) -> list[FlightOffer]:
         """Cheapest concrete options across a window of departure dates.
 
@@ -120,6 +123,7 @@ class FlightsService:
 
         dates = [depart_from + datetime.timedelta(days=i) for i in range(max(1, days_window))]
         auth_failed = False
+        currency_code, currency_symbol = ("rub", "₽") if language == "ru" else ("usd", "$")
 
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             async def one(day: datetime.date) -> list[FlightOffer]:
@@ -132,7 +136,7 @@ class FlightsService:
                             "destination": destination,
                             "departure_at": day.isoformat(),
                             "one_way": "true" if one_way else "false",
-                            "currency": "rub",
+                            "currency": currency_code,
                             "sorting": "price",
                             "limit": 3,
                             "token": self._token,
@@ -168,7 +172,7 @@ class FlightsService:
                             date=row.get("departure_at", day.isoformat())[:10],
                             price=int(price),
                             airline=row.get("airline", ""),
-                            currency="₽",
+                            currency=currency_symbol,
                             link=link,
                         )
                     )

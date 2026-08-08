@@ -1,10 +1,10 @@
 # =============================================================================
 # Brain shared memory store — brain/memory.py
 # =============================================================================
-# WHAT: The "общая память обо мне" from the plan: durable facts (with vector
+# WHAT: The "shared memory about me" from the plan: durable facts (with vector
 #       recall), the owner profile, and reminders — all in Brain's own DB, all
 #       provenance-stamped. Ported from the monolith's memory/profile/reminder
-#       services (principle 3: переносим, не переписываем), collapsed to
+#       services (principle 3: port over, don't rewrite), collapsed to
 #       single-tenant (no user_id — the subject is always the one owner).
 #
 # WHY facts + vector recall (not longer history): store small distilled facts

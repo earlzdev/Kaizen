@@ -21,7 +21,7 @@
 #       and a silently mismatched model would poison every stored vector.
 #
 # WHY multilingual: the owner writes in Russian and English; this model puts
-#       "я из Уфы" and a later Russian question near each other. Same model as
+#       "I'm from Ufa" and a later Russian question near each other. Same model as
 #       the mentor's, same vector space.
 #
 # HOW: `await Embedder().embed("text") -> list[float]`; `await warmup()` once

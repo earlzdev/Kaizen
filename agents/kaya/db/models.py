@@ -7,7 +7,7 @@
 # WHY just one table (no user_id): Кая serves ONE owner, so there is no per-user
 #       routing. She stores only the dialogue; everything durable about the owner
 #       (facts, profile, reminders) lives in Brain's shared memory, not here.
-#       This is the "локальная память (история диалога, своя БД агента)" from
+#       This is the "local memory (dialogue history, the agent's own DB)" from
 #       the plan — deliberately minimal.
 #
 # WHY the full history is kept (only a window is loaded): storing everything is

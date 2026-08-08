@@ -20,7 +20,7 @@
 # HOW it's used:
 #   render(url) → visible text after the page settles. For sites where the data
 #   is behind a form, `steps` types into fields and clicks before reading, e.g.
-#   [{"fill": "input[name=from]", "text": "Москва"}, {"click": "button.search"}].
+#   [{"fill": "input[name=from]", "text": "Lisbon"}, {"click": "button.search"}].
 # =============================================================================
 
 import logging

@@ -41,7 +41,7 @@ port="${port:-8772}"
 if [[ -z "$token" ]]; then
     echo "MODULE_EVENT_TOKEN is not set in .env." >&2
     echo "Reports and questions cannot reach you at all. Set it (the SAME value" >&2
-    echo "must be read by Brain and by every module that pushes events) and try again." >&2
+    echo "is read by Brain and by the tracker) and try again." >&2
     exit 1
 fi
 # tr, not `${token,,}`: that expansion is bash 4, and macOS ships bash 3.2 —

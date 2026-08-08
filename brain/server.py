@@ -1,7 +1,7 @@
 # =============================================================================
 # Brain MCP server — brain/server.py
 # =============================================================================
-# WHAT: The MCP front door of Brain (the "MCP спереди" half). Ported from the v1
+# WHAT: The MCP front door of Brain (the "MCP in front" half). Ported from the v1
 #       app/context/server.py, with two Phase-2 additions:
 #         1. it runs on Brain's own DB (agents/facts/... isolated from v1);
 #         2. it ENFORCES the per-agent access-list — filtering tools/list and

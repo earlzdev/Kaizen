@@ -3,7 +3,7 @@
 # =============================================================================
 # WHAT: Builds Brain's built-in memory/profile/reminder tools and assembles the
 #       ToolRegistry the MCP server serves. In Phase 2 these are the ONLY tools
-#       (модулей ещё нет); module tools discovered over gRPC join the same
+#       (no modules yet); module tools discovered over gRPC join the same
 #       registry from Phase 4.
 #
 # WHY the tools live here and not in the store: the store (brain/memory.py) is
@@ -273,7 +273,7 @@ def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
             usage=(
                 'Always send due_at with the owner\'s UTC offset — you know the '
                 'date, time and zone from your runtime context, so compute it: '
-                '{"text": "созвон с Пашей", "due_at": "2026-08-01T11:00:00+03:00"}. '
+                '{"text": "call with Pasha", "due_at": "2026-08-01T11:00:00+03:00"}. '
                 'A naive time is guessed at, an offset is exact.'
             ),
         ),
@@ -290,9 +290,9 @@ def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
                 "need to be asked. Write the note TO YOURSELF and make it "
                 "SELF-CONTAINED: what to do, and the situation it came from. By "
                 "the time it fires the conversation may have scrolled out of "
-                "your recent messages, so «спроси как дела» is a bad note and "
-                "«владелец летел в Тбилиси рейсом в 14:20, спроси как долетел и "
-                "как устроился» is a good one."
+                "your recent messages, so \"ask how it's going\" is a bad note and "
+                "\"the owner was flying to Tbilisi on a 14:20 flight, ask how the "
+                "landing and settling in went\" is a good one."
             ),
             input_schema={
                 "type": "object",
@@ -311,12 +311,12 @@ def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
             usage=(
                 'The owner says he flies to Tbilisi at 14:20 and it is a 3h '
                 'flight — work the landing time out yourself and schedule the '
-                'follow-up: {"note": "Владелец прилетел в Тбилиси — спроси, как '
-                'долетел и как устроился", "due_at": "2026-08-01T18:00:00+04:00"} '
+                'follow-up: {"note": "The owner landed in Tbilisi — ask how the '
+                'flight and settling in went", "due_at": "2026-08-01T18:00:00+04:00"} '
                 "(landing local time, plus a little). "
-                "Do NOT report the mechanics back: never «я поставила себе "
-                "напоминание». Either say the human thing («напишу, как "
-                "приземлишься») or say nothing about it at all — the owner does "
+                "Do NOT report the mechanics back: never \"I set myself a "
+                "reminder\". Either say the human thing (\"I'll check in when "
+                "you land\") or say nothing about it at all — the owner does "
                 "not need to know how you remember."
             ),
         ),
@@ -333,8 +333,8 @@ def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
             name="cancel_reminder",
             description=(
                 "Cancel one pending reminder by id. Call when the owner says a "
-                "reminder is no longer needed («отмени напоминание про...», «не "
-                "надо будить меня в 7»). Use list_reminders FIRST to find the id — "
+                "reminder is no longer needed (\"cancel the reminder about...\", "
+                "\"don't wake me at 7\"). Use list_reminders FIRST to find the id — "
                 "never guess it. Cancelling is permanent."
             ),
             input_schema={
@@ -374,7 +374,8 @@ def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
             description=(
                 "Semantic search over the archive of past conversations with the "
                 "owner (up to a year back). Call when the owner refers to an "
-                "earlier dialogue («а что мы решали про...», «ты мне говорила...») "
+                "earlier dialogue (\"what did we decide about...\", \"you told me "
+                "about...\") "
                 "and the fact isn't in shared memory. scope='mine' (default) "
                 "searches ONLY your own dialogs; pass 'all' or another agent's "
                 "slug ONLY when the owner explicitly asks to search conversations "
@@ -394,8 +395,8 @@ def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
             handler=search_conversations,
             usage=(
                 'Leave scope alone unless the owner asks about ANOTHER agent\'s '
-                'dialogs: {"query": "отпуск в Грузии"} searches only your own. '
-                'scope="all" is for «а что мы с Кузей обсуждали» — not a way to '
+                'dialogs: {"query": "vacation in Georgia"} searches only your own. '
+                'scope="all" is for "what did I discuss with Kuzya" — not a way to '
                 "widen a search that came back empty."
             ),
         ),

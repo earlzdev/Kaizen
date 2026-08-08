@@ -20,7 +20,7 @@ class FakeFlights:
         self._exc = cheapest_exc
         self._offers = offers or []
 
-    async def resolve_city(self, name):
+    async def resolve_city(self, name, language="en"):
         return (name[:3].upper(), name)
 
     async def cheapest(self, *args, **kwargs):

@@ -6,8 +6,8 @@
 #       its system prompt below the soul.
 #
 # WHY it lives in Agent Core, as data + tiny renderer: the clichés are not one
-#       agent's problem — every LLM agent produces the same «короче, вот что
-#       по…» / «дай знать, если что» register, so the map is shared (Кая now,
+#       agent's problem — every LLM agent produces the same «anyway, here's the
+#       thing about…» / «let me know if anything comes up» register, so the map is shared (Кая now,
 #       Кузя when he moves onto this stack). JSON (not markdown) so an agent
 #       could later subset/extend it programmatically; the renderer keeps the
 #       prompt shape in ONE place instead of each soul re-formatting it.

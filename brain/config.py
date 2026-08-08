@@ -6,7 +6,7 @@
 #       Postgres instance.
 #
 # WHY a separate config (and a separate DB name): the plan mandates
-#   "Postgres — один инстанс, БД на сервис" — every service has its own logical
+#   "Postgres — one instance, one DB per service" — every service has its own logical
 #   database, no cross-service JOINs. Brain must therefore build its URL from
 #   its OWN db name (BRAIN_POSTGRES_DB, default "brain"), while still sharing the
 #   host/user/password of the single Postgres container. Reusing app.config's
@@ -83,7 +83,7 @@ class BrainSettings(BaseSettings):
 
     # Cosine distance below which a new fact REFRESHES an existing one instead
     # of being stored alongside it. Deliberately tight (Step 9): at the old
-    # 0.15, "паша любит кофе" could silently overwrite "маша любит кофе" —
+    # 0.15, "pasha loves coffee" could silently overwrite "masha loves coffee" —
     # only true rephrasings should merge; when unsure, keep both.
     memory_duplicate_threshold: float = 0.05
 

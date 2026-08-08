@@ -13,8 +13,8 @@
 #       own single-file console, the admin token is typed into a login box, kept
 #       in localStorage, and sent as the Bearer on every request. Following it
 #       keeps Brain a single aiohttp server with no new dependency, and the
-#       page holds no secrets. The plan's "FastAPI + HTMX хватит" was a
-#       suggestion ("would suffice"), not a hard requirement.
+#       page holds no secrets. The plan's "FastAPI + HTMX would suffice" was a
+#       suggestion, not a hard requirement.
 #
 # WHY the page holds no secrets: it calls Brain's admin JSON endpoints
 #       (/admin/agents, /admin/tools, /admin/access, /admin/memory,

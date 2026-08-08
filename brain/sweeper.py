@@ -113,8 +113,8 @@ class ReminderSweeper:
                     )
                     continue
                 # RAW text, typed event (Step 7): how a reminder READS is the
-                # receiving agent's call — Кая adds her own "⏰ Напоминание:"
-                # framing in her delivery receiver.
+                # receiving agent's call — each agent adds its own framing
+                # (e.g. an "⏰ Reminder:" prefix) in its delivery receiver.
                 # The audience decides the KIND: an owner reminder is relayed,
                 # a self-reminder wakes the agent for a real turn instead.
                 kind = "agent_wake" if audience == AUDIENCE_AGENT else "reminder"

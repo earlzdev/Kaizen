@@ -1,7 +1,7 @@
 # =============================================================================
 # Brain module gRPC client — brain/module_client.py
 # =============================================================================
-# WHAT: Brain's gRPC client toward modules — the "gRPC к модулям" half. Speaks
+# WHAT: Brain's gRPC client toward modules — the "gRPC to modules" half. Speaks
 #       the frozen Module contract (proto/module.proto): RegisterTools to learn a
 #       module's tools, CallTool to run one. This is what makes Brain a proxy in
 #       front of the modules.

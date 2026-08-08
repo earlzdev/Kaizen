@@ -15,10 +15,10 @@ from tools.traffic_score.traffic import TrafficService
 _traffic = TrafficService(BrowserService())
 
 
-async def traffic_score(city: str) -> str:
+async def traffic_score(city: str, language: str = "en") -> str:
     if not _traffic.known(city):
         return f"Error: traffic isn't mapped for '{city}'."
-    result = await _traffic.city_score(city)
+    result = await _traffic.city_score(city, language)
     if result is None:
         return f"Error: couldn't read the traffic score for '{city}' right now."
     score, label, url = result
@@ -29,8 +29,16 @@ TOOL = ToolDef(
     name="traffic_score",
     description=(
         "Get a city's current traffic congestion score (0-10). Call when the owner "
-        "asks how bad traffic is somewhere."
+        "asks how bad traffic is somewhere. Pass `language` matching the language "
+        "you're currently replying in."
     ),
-    input_schema={"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
+    input_schema={
+        "type": "object",
+        "properties": {
+            "city": {"type": "string"},
+            "language": {"type": "string", "enum": ["en", "ru"], "description": "Output language (default en)"},
+        },
+        "required": ["city"],
+    },
     handler=traffic_score,
 )

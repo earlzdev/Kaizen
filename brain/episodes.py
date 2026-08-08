@@ -2,7 +2,7 @@
 # Brain conversation archive — brain/episodes.py
 # =============================================================================
 # WHAT: The episodic memory: every owner↔agent exchange, embedded for semantic
-#       search («а что мы решали в марте про отпуск?»). Complements the FACT
+#       search («what did we decide about the trip in March?»). Complements the FACT
 #       memory (brain/memory.py): facts are distilled one-liners the agent chose
 #       to save; episodes are the raw dialogue, archived automatically.
 #

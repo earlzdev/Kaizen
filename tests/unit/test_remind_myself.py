@@ -109,6 +109,6 @@ def test_the_tool_teaches_the_owners_flight_example_and_the_silence_rule():
     ban on narrating the mechanics."""
     tools = {t.name: t for t in build_tools(FakeStore(), episodes=None)}
     usage = tools["remind_myself"].usage
-    assert "14:20" in usage and "долетел" in usage
-    assert "я поставила себе напоминание" in usage
-    assert "напишу, как приземлишься" in usage
+    assert "14:20" in usage and "Tbilisi" in usage
+    assert "I set myself a reminder" in usage
+    assert "I'll check in when you land" in usage

@@ -25,14 +25,15 @@ from infra.modkit.events import DeliveryEvent
 
 
 def __getattr__(name: str):
-    """ModuleServicer подгружается ЛЕНИВО.
+    """ModuleServicer is loaded LAZILY.
 
-    WHY: он тянет grpcio, а DeliveryEvent — обычная pydantic-модель. Агенту
-    нужен только контракт события (его приёмник разбирает пуши от Brain), и
-    платить за это gRPC-стеком в своём образе он не должен: у голосового
-    Кузи это лишний пакет, которым он никогда не пользуется, — и импорт
-    падал на его образе, где grpcio нет. Модули, которым сервисер нужен,
-    получают его тем же `from infra.modkit import ModuleServicer`.
+    WHY: it pulls in grpcio, while DeliveryEvent is a plain pydantic model. An
+    agent only needs the event contract (its receiver parses pushes from
+    Brain), and shouldn't have to pay for a gRPC stack in its own image for
+    that: for the voice agent Кузя it's a package it never uses, and the
+    import used to fail on his image, which has no grpcio. Modules that do
+    need the servicer get it through the same
+    `from infra.modkit import ModuleServicer`.
     """
     if name == "ModuleServicer":
         from infra.modkit.servicer import ModuleServicer
