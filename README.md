@@ -216,9 +216,12 @@ Telegram ──► Кая (agents/kaya) ──MCP/HTTP──► Brain ──gRPC
   gRPC.
 - **`infra/proto/`** — the frozen gRPC contract between Brain and modules,
   and its generated code.
+- **`modules/tracker/`** — a project-management module: queues work for
+  your other repos, dispatches it to a small per-project daemon, and
+  reports back through Кая. See `modules/tracker/README.md`.
 
-A couple of internal modules (project tracker, a learning module) run on
-the same Brain; they're private and not published here.
+A learning/RAG module runs on the same Brain too; it's private and not
+published here.
 
 ---
 
