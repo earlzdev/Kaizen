@@ -1,10 +1,10 @@
 # =============================================================================
 # Brain built-in tools — brain/tools.py
 # =============================================================================
-# WHAT: Builds Brain's built-in memory/profile/reminder tools and assembles the
-#       ToolRegistry the MCP server serves. In Phase 2 these are the ONLY tools
-#       (no modules yet); module tools discovered over gRPC join the same
-#       registry from Phase 4.
+# WHAT: Builds Brain's built-in memory/profile/reminder/notes tools and
+#       assembles the ToolRegistry the MCP server serves. In Phase 2 these are
+#       the ONLY tools (no modules yet); module tools discovered over gRPC
+#       join the same registry from Phase 4.
 #
 # WHY the tools live here and not in the store: the store (brain/memory.py) is
 #       pure persistence; the tools are the LLM-facing surface — their
@@ -16,8 +16,8 @@
 #       here (unlike the in-process bot, where retrieval is automatic) because a
 #       remote agent has no other way to pull memory before replying.
 #
-# HOW: `build_registry(embedder, episodes)` -> ToolRegistry, handed to the MCP
-#      server (episodes = the conversation-archive store, brain/episodes.py).
+# HOW: `build_registry(embedder, episodes, notes)` -> ToolRegistry, handed to
+#      the MCP server (episodes = brain/episodes.py, notes = brain/notes.py).
 # =============================================================================
 
 import datetime
@@ -28,11 +28,14 @@ from brain.db.models import AUDIENCE_AGENT, AUDIENCE_OWNER
 from brain.embedder import Embedder
 from brain.episodes import EpisodeStore
 from brain.memory import MemoryStore
+from brain.notes import NoteStore
 from brain.registry import Tool, ToolRegistry
 
 
-def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
-    """The built-in memory/profile/reminder/archive tools, bound to stores."""
+def build_tools(
+    store: MemoryStore, episodes: EpisodeStore | None, notes: NoteStore | None = None
+) -> list[Tool]:
+    """The built-in memory/profile/reminder/archive/notes tools, bound to stores."""
 
     async def remember_fact(fact: str) -> str:
         return await store.remember(fact)
@@ -135,6 +138,49 @@ def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
         return result.replace("Reminder set for", "Noted to self for", 1).replace(
             "Reminder already set for", "Already noted to self for", 1
         )
+
+    async def save_note(content: str, category: str | None = None, tags: list[str] | None = None) -> str:
+        return await notes.save_note(content, category=category, tags=tags)
+
+    # Notes accumulate long-form owner content (unlike short facts), so an
+    # unfiltered listing is capped — the model should narrow by category/tag
+    # or use search_notes instead of dumping the whole table into its context.
+    LIST_NOTES_CAP = 50
+
+    async def list_notes(category: str | None = None, tag: str | None = None) -> str:
+        rows = await notes.list_notes(category=category, tag=tag)
+        if not rows:
+            return "No notes found."
+        shown = rows[:LIST_NOTES_CAP]
+        text = "Notes (id in brackets):\n" + "\n".join(
+            f"[{n.id}] {n.content} (category={n.category}, tags={n.tags})" for n in shown
+        )
+        if len(rows) > LIST_NOTES_CAP:
+            text += (
+                f"\n… {len(rows) - LIST_NOTES_CAP} more not shown — narrow by "
+                "category/tag or use search_notes."
+            )
+        return text
+
+    async def search_notes(query: str) -> str:
+        rows = await notes.search_notes(query)
+        if not rows:
+            return "No relevant notes found."
+        return "Relevant notes:\n" + "\n".join(
+            f"[{n.id}] {n.content} (category={n.category}, tags={n.tags})" for n in rows
+        )
+
+    async def list_note_categories() -> str:
+        categories = await notes.list_categories()
+        tags = await notes.list_tags()
+        return (
+            "Categories: " + (", ".join(categories) if categories else "none") + "\n"
+            "Tags: " + (", ".join(tags) if tags else "none")
+        )
+
+    async def forget_note(note_id: int) -> str:
+        deleted = await notes.forget_note(note_id)
+        return f"Note {note_id} deleted." if deleted else f"No note with id {note_id}."
 
     async def log_conversation(owner_message: str, agent_reply: str) -> str:
         return await episodes.log(owner_message, agent_reply)
@@ -354,6 +400,103 @@ def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
             ),
         ),
         Tool(
+            name="save_note",
+            description=(
+                "Save an explicit note to the owner's note list. Call this ONLY "
+                "when the owner explicitly asks you to write something down "
+                "(\"note this\", \"add to notes\", \"запиши в заметки\") — never "
+                "infer a note the way you infer memory facts. If the owner didn't "
+                "state a category or tags, infer them yourself from the content "
+                "before calling this — never leave them empty and never ask a "
+                "clarifying question just to fill them in. Check list_note_categories "
+                "first if unsure, and reuse an existing close category instead of "
+                "minting a near-duplicate."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "The note text"},
+                    "category": {
+                        "type": "string",
+                        "description": "One bucket, inferred from content if not stated (e.g. 'business')",
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Finer-grained labels, inferred from content if not stated",
+                    },
+                },
+                "required": ["content"],
+            },
+            handler=save_note,
+            usage=(
+                'Owner: "запиши идею для бизнеса - продажа лодок из Китая" -> '
+                '{"content": "Idea: sell boats imported from China", '
+                '"category": "business", "tags": ["ideas", "sales"]}.'
+            ),
+        ),
+        Tool(
+            name="list_notes",
+            description=(
+                "List notes, newest first, with ids. Optionally filter by an "
+                "exact category or a tag. Call when the owner asks what notes "
+                "they have (overall or in a category/tag), or before forgetting one."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Exact category to filter by"},
+                    "tag": {"type": "string", "description": "Tag the note must have"},
+                },
+            },
+            handler=list_notes,
+        ),
+        Tool(
+            name="search_notes",
+            description=(
+                "Semantic search over notes for a query. Call when the owner "
+                "asks about a note by topic rather than by category/tag "
+                "(\"what did I note about...\")."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to look for"}
+                },
+                "required": ["query"],
+            },
+            handler=search_notes,
+        ),
+        Tool(
+            name="list_note_categories",
+            description=(
+                "List every category and tag currently in use across notes. "
+                "Call before assigning a category/tag to a new note when unsure, "
+                "so you reuse an existing one instead of fragmenting the taxonomy "
+                "with a near-duplicate — or when the owner asks what categories/"
+                "tags exist."
+            ),
+            input_schema={"type": "object", "properties": {}},
+            handler=list_note_categories,
+        ),
+        Tool(
+            name="forget_note",
+            description=(
+                "Delete one note by id. Call when the owner asks to remove a "
+                "note. Use list_notes or search_notes FIRST to find the id — "
+                "never guess it."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "note_id": {"type": "integer", "description": "Id from list_notes/search_notes"}
+                },
+                "required": ["note_id"],
+            },
+            handler=forget_note,
+            usage='Id comes from list_notes/search_notes: {"note_id": 5}.',
+        ),
+        Tool(
             name="log_conversation",
             description=(
                 "SYSTEM TOOL — the agent harness calls this automatically after "
@@ -403,9 +546,15 @@ def build_tools(store: MemoryStore, episodes: EpisodeStore) -> list[Tool]:
     ]
 
 
-def build_registry(embedder: Embedder, episodes: EpisodeStore | None = None) -> ToolRegistry:
-    """Assemble Brain's built-in tool registry (memory + conversation archive)."""
+def build_registry(
+    embedder: Embedder,
+    episodes: EpisodeStore | None = None,
+    notes: NoteStore | None = None,
+) -> ToolRegistry:
+    """Assemble Brain's built-in tool registry (memory + conversation archive + notes)."""
     store = MemoryStore(embedder)
     registry = ToolRegistry()
-    registry.register_all(build_tools(store, episodes or EpisodeStore(embedder)))
+    registry.register_all(
+        build_tools(store, episodes or EpisodeStore(embedder), notes or NoteStore(embedder))
+    )
     return registry

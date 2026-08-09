@@ -21,7 +21,7 @@
 #
 # HOW:  await upgrade("brain")                       # in the service's startup
 #       python -m infra.migrations upgrade brain     # by hand
-#       python -m infra.migrations revision kaya "add purpose to project"
+#       python -m infra.migrations revision tracker "add purpose to project"
 #       python -m infra.migrations upgrade --all
 # =============================================================================
 
@@ -125,8 +125,9 @@ def upgrade_sync(service: str) -> None:
 
     A service whose database does not exist yet is SKIPPED, not failed: each
     service creates its own database on its own first boot, and one that has
-    never been started would otherwise abort `upgrade --all` — taking every
-    service after it in the loop down with it, silently un-migrated.
+    never been started (today: kuzya, which has no compose service yet) would
+    otherwise abort `upgrade --all` — taking every service after it in the loop
+    down with it, silently un-migrated.
     """
     try:
         _adopt_if_legacy(service)

@@ -1,5 +1,7 @@
 # Environment & secrets
 .env
+.env.e2e.generated
+.env.e2e.live.secrets
 *.pem
 *.key
 
@@ -7,6 +9,12 @@
 # contain memories, chat history and everything Kaya knows about you.
 backups/
 exports/
+
+# Scaffolded projects. `infra/agentkit/render.py` writes here by default, and
+# each project runs its own `git init` — committing them into Kaizen would nest
+# one repository inside another and make the kit and its output impossible to
+# tell apart. Move a project out (`mv projects/<name> ~/<name>`) once it is real.
+projects/
 
 # Python
 __pycache__/

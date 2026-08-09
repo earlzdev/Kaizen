@@ -46,7 +46,7 @@ class FakeReminder:
 
 def _registry(store) -> ToolRegistry:
     reg = ToolRegistry()
-    reg.register_all(build_tools(store, episodes=None))
+    reg.register_all(build_tools(store, episodes=None, notes=None))
     return reg
 
 
@@ -68,7 +68,7 @@ async def test_add_reminder_stays_owner_only():
         "add_reminder", {"text": "позвонить маме", "due_at": DUE}
     )
     assert store.added[0]["audience"] == AUDIENCE_OWNER
-    schema = {t.name: t.input_schema for t in build_tools(store, episodes=None)}
+    schema = {t.name: t.input_schema for t in build_tools(store, episodes=None, notes=None)}
     assert "audience" not in schema["add_reminder"]["properties"]
 
 
@@ -107,7 +107,7 @@ async def test_list_reminders_marks_self_notes():
 def test_the_tool_teaches_the_owners_flight_example_and_the_silence_rule():
     """Owner's requirement: the usage note carries the flight example AND the
     ban on narrating the mechanics."""
-    tools = {t.name: t for t in build_tools(FakeStore(), episodes=None)}
+    tools = {t.name: t for t in build_tools(FakeStore(), episodes=None, notes=None)}
     usage = tools["remind_myself"].usage
     assert "14:20" in usage and "Tbilisi" in usage
     assert "I set myself a reminder" in usage

@@ -36,6 +36,7 @@ import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
@@ -44,6 +45,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Dimensionality of the local embedding model (paraphrase-multilingual-MiniLM-
@@ -140,6 +142,38 @@ class Fact(Base):
     )
 
 
+class Note(Base):
+    """One explicit note the owner asked to be written down, with an optional
+    category/tags and a vector embedding for semantic search.
+
+    WHY separate from Fact: a Fact is INFERRED by the agent from conversation
+    (auto-saved, no explicit ask). A Note is the opposite — written ONLY on an
+    explicit "note this down", organized by the agent into a category + tags
+    it infers from content when the owner doesn't state them, so it reads
+    back as a list/taxonomy rather than a bag of recalled facts.
+
+    No user_id: Brain is single-tenant, same as Fact/Profile/Reminder."""
+
+    __tablename__ = "notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    content: Mapped[str] = mapped_column(Text)
+    category: Mapped[str | None] = mapped_column(String(64))
+    tags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBED_DIM))
+    agent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("agents.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (Index("ix_brain_notes_category", "category"),)
+
+
 class Profile(Base):
     """Stable, deterministically-needed facts about the owner (timezone, home
     location) kept as first-class fields, not fuzzy facts.
@@ -229,6 +263,41 @@ class Episode(Base):
     __table_args__ = (Index("ix_brain_episodes_slug_created", "agent_slug", "created_at"),)
 
 
+class TunnelMessage(Base):
+    """One turn of a live direct tunnel between the owner's agent and an
+    external module-side conversation.
+
+    WHY a separate table and not another Episode: Episode is durable,
+    EMBEDDED, summarised memory — one coarse row per whole owner<->agent
+    exchange, written on demand. A tunnel is the opposite shape: many small
+    turns in one continuous session, written on every message, valuable only
+    for "what did we just say to each other" continuity — not for semantic
+    recall later. Embedding every turn would be pure cost for a transcript
+    nobody searches.
+
+    WHY `directive_id` (the originating module's own session id, not a
+    Brain-minted one): the module already assigns one id for the whole
+    conversation's lifetime, and that id is the one thing every leg of this
+    feature already agrees on. Minting a second id in Brain would just be a
+    second name for the same session."""
+
+    __tablename__ = "tunnel_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    directive_id: Mapped[int] = mapped_column(BigInteger)
+    project: Mapped[str] = mapped_column(String(255))
+    agent_slug: Mapped[str] = mapped_column(String(64), default="")
+    role: Mapped[str] = mapped_column(String(16))  # "owner" | "agent"
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_brain_tunnel_messages_directive_created", "directive_id", "created_at"),
+    )
+
+
 class ChangeLog(Base):
     """The audit trail: one row per agent-attributable write to the shared
     memory. Lifted from the v1 provenance design — records who changed what,
@@ -237,7 +306,7 @@ class ChangeLog(Base):
     __tablename__ = "change_log"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    entity: Mapped[str] = mapped_column(String(20))      # fact|profile|reminder
+    entity: Mapped[str] = mapped_column(String(20))      # fact|profile|reminder|note
     entity_id: Mapped[int] = mapped_column()
     agent_id: Mapped[int | None] = mapped_column(
         ForeignKey("agents.id", ondelete="SET NULL")

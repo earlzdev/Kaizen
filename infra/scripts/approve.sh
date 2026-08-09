@@ -2,7 +2,7 @@
 # =============================================================================
 # Approve pending agents — scripts/approve.sh
 # =============================================================================
-# WHAT: Lists agents waiting to connect (Кая, …) and prompts you in the
+# WHAT: Lists agents waiting to connect (Кая, Кузя, …) and prompts you in the
 #       terminal to approve each. Approved agents receive their token and connect
 #       automatically. Works with closed ports (talks to Brain via the container).
 #

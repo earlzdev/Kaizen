@@ -3,10 +3,8 @@
 # =============================================================================
 # v2 stack (the v1 monolith bot/context were removed in the Phase-9 cutover):
 #   postgres (shared instance), brain (MCP gateway + memory + access-list), the
-#   shared `tools` service (stateless utility tools) behind gRPC, and the kaya
-#   agent (now the default Telegram bot). Each stateful v2 service owns its
-#   own logical DB. (Private deployments can add more gRPC modules the same
-#   way `tools` is wired in.)
+#   shared `tools` service (stateless utility tools), and the kaya agent (now
+#   the default Telegram bot). Each stateful v2 service owns its own logical DB.
 #
 # pgvector stores/queries embeddings directly in Postgres (cosine similarity),
 # avoiding a separate vector DB. Each v2 service owns its own logical DB.
@@ -130,8 +128,8 @@ services:
       - ../.env
     environment:
       POSTGRES_HOST: postgres
-      # Discover + proxy over gRPC: the shared `tools` service. (Private
-      # deployments can add more modules here, comma-separated.)
+      # Discover + proxy over gRPC: the shared `tools` service. Add more
+      # domain modules here as "name=host:port" comma-separated pairs.
       BRAIN_MODULES: "tools=tools:9105"
       # Reminders whose owning agent has no delivery address fall back to Кая
       # (the owner's primary channel) — never to "any agent" (Step 9).
@@ -150,7 +148,7 @@ services:
       start_interval: 2s
       start_period: 120s
     # No published port — Кая reaches the MCP front door at brain:8772 on the
-    # compose network. For the admin panel / an EXTERNAL agent (Кузя), use a
+    # compose network. For the admin panel / another external agent, use a
     # tunnel/VPN or docker-compose.dev.yml, never a public port.
 
   # ---------------------------------------------------------------------------

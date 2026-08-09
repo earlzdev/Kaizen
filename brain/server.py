@@ -51,11 +51,13 @@ from brain.api_models import (
     EnrollStatusRequest,
     ModuleEventRequest,
     SetDeliveryRequest,
+    TunnelMessageRequest,
 )
 from brain.memory import MemoryStore
 from brain.panel import PANEL_HTML
 from brain.provenance import current_actor_id, current_actor_slug
 from brain.registry import ToolRegistry
+from brain.tunnel import TunnelStore
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +137,7 @@ class BrainServer:
         delivery=None,
         module_event_token: str = "",
         default_delivery_slug: str = "",
+        tunnel: TunnelStore | None = None,
     ) -> None:
         self._registry = registry
         self._store = store
@@ -152,6 +155,10 @@ class BrainServer:
         self._delivery = delivery
         self._module_event_token = module_event_token
         self._default_delivery_slug = default_delivery_slug
+        # Write side of the tunnel transcript. Defaults to
+        # a real store (it needs no external client, just Brain's own DB) so
+        # callers don't have to wire up a no-op for tests that don't care.
+        self._tunnel = tunnel if tunnel is not None else TunnelStore()
 
     def build_app(self) -> web.Application:
         app = web.Application()
@@ -162,6 +169,7 @@ class BrainServer:
         app.router.add_get("/admin/agents", self._list_agents)
         app.router.add_post("/agent/delivery", self._set_delivery)
         app.router.add_post("/event", self._module_event)
+        app.router.add_post("/tunnel/message", self._tunnel_message)
         # --- Admin panel (Phase 8): UI + its data endpoints ---
         app.router.add_get("/admin/panel", self._panel)
         app.router.add_get("/admin/tools", self._admin_tools)
@@ -245,12 +253,12 @@ class BrainServer:
         )
 
     async def _module_event(self, request: web.Request) -> web.Response:
-        """A MODULE asks Brain to tell an agent something (tracker v2, Step 5).
+        """A MODULE asks Brain to tell an agent something.
 
         WHY this route exists at all — it is the one inversion in the system.
         Everywhere else the flow is agent → Brain → module, and Brain dials
-        modules. But the tracker Hub genuinely originates news: a project's PR
-        is ready, or one of its agents needs the owner to decide something. That
+        modules. But a module can genuinely originate news of its own: some
+        background job finished, or something needs the owner to decide. That
         has to reach Кая, and the alternative — letting the module push straight
         to the agent — would mean every module learning agents' addresses and
         the delivery token. So the module says WHAT happened, and Brain, which
@@ -298,6 +306,25 @@ class BrainServer:
         if not ok:
             return web.json_response({"error": "delivery failed"}, status=502)
         return web.json_response({"ok": True, "agent": slug})
+
+    async def _tunnel_message(self, request: web.Request) -> web.Response:
+        """A module logs one turn of a direct-but-logged agent tunnel — the
+        dialogue itself goes straight between the two agents, this call is
+        only the transcript write. Same shared secret as /event: both are a
+        module telling Brain something, not an agent acting through Brain.
+        """
+        if not self._module_event_token or not secrets.compare_digest(
+            _bearer(request), self._module_event_token
+        ):
+            return web.json_response({"error": "unauthorized"}, status=401)
+        body, err = await parse_body(request, TunnelMessageRequest)
+        if err is not None:
+            return err
+        await self._tunnel.log(
+            body.directive_id, body.project, body.role, body.text,
+            agent_slug=body.agent_slug,
+        )
+        return web.json_response({"ok": True})
 
     # ----- admin panel + its data endpoints (Phase 8) -----
 

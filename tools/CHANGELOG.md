@@ -11,6 +11,15 @@ tuning) belongs in the commit message, not here.
 Starts empty on 2026-08-07 (the file itself is new); history before that is
 in `git log -- tools/`.
 
+## 2026-08-09
+
+- New `deploy` tool: lets Кая open (and, only when explicitly told, merge)
+  the PR that ships `main` into `deploy`, the branch a self-hosted GitHub
+  Actions runner watches to redeploy prod (`.github/workflows/deploy.yml`).
+  Talks to the GitHub REST API only — this image has no local `.git` to push
+  from. Requires `GH_DEPLOY_TOKEN`; empty means the tool refuses to run
+  instead of silently no-op'ing.
+
 ## 2026-08-08
 
 - `weather`, `traffic_score`, `route_time`, `cheapest_flights`,

@@ -12,6 +12,14 @@ here — this file is for what changed about how she acts or what she can do.
 > than translated. If you need the untranslated, unpruned original, it's in
 > this repo's git history before that date.
 
+## 2026-08-09
+
+- New `## Notes` soul section: on an explicit "note this down" (never
+  inferred, unlike Memory), Кая saves it via Brain's new note tools,
+  inferring a category and tags from content when the owner doesn't state
+  them, and reuses existing categories/tags (checked via
+  `list_note_categories`) instead of minting near-duplicates.
+
 ## 2026-08-07
 
 - Кая can now run in English, not just Russian (new `KAYA_LANGUAGE`

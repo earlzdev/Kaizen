@@ -10,7 +10,7 @@ anthropic>=0.50,<1
 # it is pinned explicitly here.
 aiohttp>=3.9,<4
 
-# gRPC — the v2 transport between Brain and modules.
+# gRPC — the v2 transport between Brain and modules (Наставник/Трекер/Психолог).
 # grpcio-tools is needed only to regenerate proto/gen/ via proto/gen.sh; it is
 # kept here so a fresh clone can run codegen without hunting for the version.
 # Floor pinned to 1.83: the committed proto/gen/*_grpc.py embeds a hard
