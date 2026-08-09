@@ -28,6 +28,12 @@ Created 2026-08-07; history before that is in `git log -- brain/`.
   embedded exchange, so it isn't searched or summarised, just kept so the
   owner's primary agent doesn't lose the thread. Same shared secret as
   `/event` (`MODULE_EVENT_TOKEN`).
+- New read-only mobile dashboard at `GET /admin/tracker` (plus proxy routes
+  `/admin/tracker/{overview,projects,tasks,activity}`) — lets the owner check
+  tracker project/directive status and live agent activity from a phone.
+  Brain proxies tracker's HTTP API so the phone only ever holds Brain's own
+  admin token; tracker's admin token stays server-side
+  (`TRACKER_ADMIN_TOKEN`/`TRACKER_HTTP_URL` in Brain's config).
 
 ## 2026-08-07
 

@@ -1,15 +1,16 @@
 # =============================================================================
 # Brain tunnel transcript — brain/tunnel.py
 # =============================================================================
-# WHAT: The write side of a direct owner<->module-side-agent tunnel's
-#       transcript — every turn, logged so the owner's agent doesn't lose the
-#       thread while the owner is talking directly to another agent.
+# WHAT: The write side of the "позови альфреда" tunnel's transcript — every
+#       owner<->Warden turn, logged so Кая doesn't lose the thread while the
+#       owner is talking directly to a project's agent.
 #
 # WHY logged in Brain and not left as a raw side-channel (the owner's own
 #       decision, direct-but-logged): the dialogue goes straight through
-#       (agent -> module -> the other agent and back), but every turn also
-#       lands here so the owner's agent can catch up on what was said without
-#       holding the microphone herself for the whole conversation.
+#       (Кая -> tracker -> Warden and back, see modules/tracker/tools.py's
+#       open_conversation/send_chat_message), but every turn also lands here
+#       so Кая can catch up on what was said without holding the microphone
+#       herself for the whole conversation.
 #
 # WHY not brain/episodes.py's EpisodeStore: see TunnelMessage's docstring in
 #       brain/db/models.py — a tunnel is many small turns in one session, not

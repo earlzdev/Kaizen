@@ -11,7 +11,7 @@
 #
 # NETWORKING — this BASE file is the PRODUCTION setup: NO service publishes a
 # host port. Services reach each other by name on the compose network
-# (brain:8772, postgres:5432, tools:9105, ...). The network still allows
+# (brain:8772, postgres:5432, tracker:9103, ...). The network still allows
 # OUTBOUND traffic (Кая polls Telegram, agents call the Anthropic API, the tools
 # reach the web), but NOTHING is reachable from the host or the internet. Кая is
 # a polling Telegram bot, so she needs no inbound at all.
@@ -52,6 +52,54 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  # ---------------------------------------------------------------------------
+  # tracker — the STANDALONE v2 tracker module, and the "Hub" of tracker v2
+  # (docs/tracker-architecture.md). Owns its own DB and serves THREE faces:
+  #   :8770 HTTP  — dashboard + the poller tier of external projects
+  #   :9103 gRPC  — the Module contract (Brain dials it for Кая's tools)
+  #   :9104 gRPC  — the Hub contract (projects' Wardens dial it: enroll, status,
+  #                 reports, questions, heartbeats)
+  #
+  # NOT published: everything reaches it by service name on the compose network.
+  # A project running a Warden joins THIS network and dials tracker:9104. If a
+  # project must live outside, add a localhost/VPN-bound port via
+  # docker-compose.dev.yml — never expose it to the open internet.
+  # ---------------------------------------------------------------------------
+  tracker:
+    container_name: kaizen-tracker
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile
+    restart: unless-stopped
+    command: python -m modules.tracker.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: postgres
+      TRACKER_MODULE_BIND_ADDR: "0.0.0.0:9103"
+      TRACKER_HUB_BIND_ADDR: "0.0.0.0:9104"
+      # Where the Hub posts its events (a finished directive, an agent's
+      # question) so Brain can push them on to Кая. NOT a depends_on: the
+      # tracker boots fine without Brain and only needs it when something
+      # happens — and Brain depends_on tracker, so requiring it would deadlock.
+      BRAIN_URL: "http://brain:8772"
+    healthcheck:
+      # Three faces, one probe each: the HTTP /health (dashboard face) plus a
+      # TCP touch of BOTH gRPC ports — the process is only useful with all three
+      # bound, and a Warden dialing an unbound 9104 would look like a Hub outage.
+      # python:3.12-slim ships no curl/wget, so the probe is a python one-liner.
+      test: ["CMD", "python", "-c", "import socket,urllib.request; urllib.request.urlopen('http://localhost:8770/health', timeout=3); socket.create_connection(('localhost', 9103), 3).close(); socket.create_connection(('localhost', 9104), 3).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Probe every 2s while starting (Docker 25+), so `make up` doesn't
+      # idle a full interval waiting for a service that is already listening.
+      start_interval: 2s
+      start_period: 30s
 
   # tools — the shared utility-tools service (top-level tools/, one dir per tool):
   # search, headless browser, YouTube transcripts, flights, traffic. Stateless
@@ -122,15 +170,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      tracker:
+        # service_started, NOT service_healthy: the tracker now REFUSES to boot
+        # on a missing/template MODULE_EVENT_TOKEN — deliberately, so that
+        # deployment mistake is loud. Gating Brain on its HEALTH would turn
+        # "tracker misconfigured" into "the entire stack is down": Brain (and
+        # Кая behind it) never start, and the one banner explaining the problem
+        # sits in a container nobody can reach. Brain tolerates a missing
+        # module at boot and re-discovers on demand (/admin/modules/refresh).
+        condition: service_started
       tools:
         condition: service_healthy
     env_file:
       - ../.env
     environment:
       POSTGRES_HOST: postgres
-      # Discover + proxy over gRPC: the shared `tools` service. Add more
-      # domain modules here as "name=host:port" comma-separated pairs.
-      BRAIN_MODULES: "tools=tools:9105"
+      # Discover + proxy over gRPC: the tracker module and the shared `tools`
+      # service. Add more domain modules here as "name=host:port" pairs.
+      BRAIN_MODULES: "tracker=tracker:9103,tools=tools:9105"
       # Reminders whose owning agent has no delivery address fall back to Кая
       # (the owner's primary channel) — never to "any agent" (Step 9).
       DEFAULT_DELIVERY_AGENT_SLUG: "kaya"

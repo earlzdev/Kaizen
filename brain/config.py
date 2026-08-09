@@ -68,9 +68,9 @@ class BrainSettings(BaseSettings):
     delivery_timeout: float = 10.0
 
     # Shared secret a MODULE presents to POST /event — the one route where a
-    # module reaches an agent instead of the other way round (a background job
-    # finishing, or a module needing the owner to decide something).
-    # Deliberately NOT brain_admin_token: this grants exactly "push
+    # module reaches an agent instead of the other way round (the tracker Hub
+    # telling the owner a PR is ready, or that a project's agent has a
+    # question). Deliberately NOT brain_admin_token: this grants exactly "push
     # a message to an agent", nothing the admin token grants. Empty = /event
     # rejects everything, so a missing secret fails closed.
     module_event_token: str = ""
@@ -91,7 +91,7 @@ class BrainSettings(BaseSettings):
     # the agent with this slug (compose sets "kaya"). Empty = no fallback —
     # the reminder is skipped with a warning until the owner reconnects.
     # Replaces the old "any agent with an address" pick (Step 9), which would
-    # misroute reminders the moment a second agent registers one.
+    # misroute reminders the moment a second agent (Кузя) registers one.
     default_delivery_agent_slug: str = ""
 
     # Last-resort timezone for a reminder set with a naive time when the owner
@@ -101,6 +101,13 @@ class BrainSettings(BaseSettings):
     # Backup service (the admin panel proxies list/create through Brain to it).
     backup_url: str = "http://backup:8781"
     backup_api_token: str = ""  # override; defaults to brain_admin_token below
+
+    # Tracker Hub's HTTP API (the mobile dashboard proxies read-only calls
+    # through Brain to it, same shape as the backup proxy above). Brain never
+    # touches tracker's DB — this is a plain HTTP client credential, not a
+    # service import, so it doesn't violate DB-per-service isolation.
+    tracker_http_url: str = "http://tracker:8770"
+    tracker_admin_token: str = ""
 
     @property
     def backup_token(self) -> str:
