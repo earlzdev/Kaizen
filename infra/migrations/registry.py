@@ -27,6 +27,8 @@ _SERVICES = {
               lambda m: m.settings, ("vector",)),
     "kaya": ("agents.kaya.db.models", "Base", "agents.kaya.config",
              lambda m: m.settings, ()),
+    "tracker": ("modules.tracker.models", "TrackerBase", "modules.tracker.config",
+                lambda m: m.settings, ()),
 }
 
 SERVICES = tuple(_SERVICES)

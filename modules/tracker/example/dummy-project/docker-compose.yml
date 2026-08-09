@@ -1,0 +1,64 @@
+# =============================================================================
+# Dummy project stack — modules/tracker/example/dummy-project/docker-compose.yml
+# =============================================================================
+# WHAT: Runs the dummy project's Warden as its OWN compose stack, joined to the
+#       Kaizen network so it can reach the Hub at tracker:9104 and the Hub can
+#       dial it back at dummy-warden:9200.
+#
+# WHY a separate compose file and not a service in Kaizen's: this is how a REAL
+#       project integrates. It lives in its own repo, with its own lifecycle,
+#       and joins the Kaizen network as an external network. Putting it in the
+#       main compose file would make the example lie about the boundary it
+#       exists to demonstrate.
+#
+# HOW:
+#   docker compose -f modules/tracker/example/dummy-project/docker-compose.yml up -d --build
+#   # then approve it — ask Кая, or use the panel's Fleet view, or:
+#   #   curl -X POST -H "Authorization: Bearer $TRACKER_ADMIN_TOKEN" \
+#   #        http://localhost:8770/projects/dummy/approve
+#   docker compose -f modules/tracker/example/dummy-project/docker-compose.yml logs -f
+# =============================================================================
+
+name: kaizen-dummy-project
+
+services:
+  dummy-warden:
+    container_name: dummy-warden
+    build:
+      # The Kaizen repo root — see the Dockerfile's header for why.
+      context: ../../../..
+      dockerfile: modules/tracker/example/dummy-project/Dockerfile
+    restart: unless-stopped
+    environment:
+      HUB_ADDR: "tracker:9104"
+      PROJECT_NAME: "dummy"
+      # What the Hub dials to reach us. Must match the container name on the
+      # shared network, or dispatch silently never arrives.
+      GRPC_ADDR: "dummy-warden:9200"
+      BIND_ADDR: "0.0.0.0:9200"
+      MAX_CONCURRENT: "2"
+      # Seconds per fake pipeline phase. Long enough to `docker kill` this
+      # container mid-Directive and watch the lease expire.
+      STEP_SECONDS: "6"
+      # How long the fake dev waits for the owner's answer before proceeding
+      # under a stated assumption (architecture §7 case 5).
+      ASK_TIMEOUT: "120"
+    volumes:
+      # The project's "repo": where docs/tracker/{task_id}/ Handoffs and Status
+      # files are written. A named volume so they survive a restart, which is
+      # half the point of Handoffs being files.
+      - dummy-repo:/repo
+      # Its enrollment secret + issued token, exactly as Кая persists hers.
+      - dummy-state:/state
+    networks:
+      - kaizen
+
+networks:
+  kaizen:
+    # Created by the main Kaizen stack; this project only joins it.
+    name: kaizen_default
+    external: true
+
+volumes:
+  dummy-repo:
+  dummy-state:

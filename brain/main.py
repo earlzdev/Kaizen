@@ -49,6 +49,7 @@ from brain.notes import NoteStore
 from brain.server import BrainServer
 from brain.sweeper import ReminderSweeper
 from brain.tools import build_registry
+from brain.tracker_client import TrackerClient
 
 logging.basicConfig(
     level=logging.INFO,
@@ -138,6 +139,13 @@ async def main() -> None:
     delivery_client = DeliveryClient(
         settings.delivery_token, timeout=settings.delivery_timeout
     )
+    # None (not an empty-token client) when unconfigured, so the dashboard
+    # routes answer a clean 503 instead of every call failing tracker-side auth.
+    tracker_client = (
+        TrackerClient(settings.tracker_http_url, settings.tracker_admin_token)
+        if settings.tracker_admin_token
+        else None
+    )
     server = BrainServer(
         registry=registry,
         store=agent_store,
@@ -152,10 +160,11 @@ async def main() -> None:
         delivery=delivery_client,
         module_event_token=settings.module_event_token,
         default_delivery_slug=settings.default_delivery_agent_slug,
+        tracker=tracker_client,
     )
     # A banner, not a boot refusal: Brain has other jobs (memory, tools, the
-    # panel) that stay useful without module events, whereas a module's whole
-    # purpose here is telling the owner things — which is why it refuses instead.
+    # panel) that stay useful without module events, whereas the tracker's whole
+    # purpose is telling the owner things — which is why it refuses instead.
     # Loud either way: this used to be one warning line among hundreds, and a
     # deployment mistake that silently drops every report is not a log-level-INFO
     # kind of problem. `${VAR:?}` and `if not value` both catch UNSET and neither
@@ -165,9 +174,9 @@ async def main() -> None:
             "\n"
             "=========================================================\n"
             " MODULE_EVENT_TOKEN is empty or still a template value.\n"
-            " POST /event rejects everything, so a module CANNOT\n"
+            " POST /event rejects everything, so the tracker CANNOT\n"
             " tell you about reports, questions or requeues.\n"
-            " Set the SAME value in .env on Brain and the module.\n"
+            " Set the SAME value in .env on Brain and the tracker.\n"
             "========================================================="
         )
     if not settings.enroll_token:

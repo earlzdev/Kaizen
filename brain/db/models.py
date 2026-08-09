@@ -264,8 +264,7 @@ class Episode(Base):
 
 
 class TunnelMessage(Base):
-    """One turn of a live direct tunnel between the owner's agent and an
-    external module-side conversation.
+    """One turn of a live Кая<->Warden tunnel ("позови альфреда").
 
     WHY a separate table and not another Episode: Episode is durable,
     EMBEDDED, summarised memory — one coarse row per whole owner<->agent
@@ -275,11 +274,11 @@ class TunnelMessage(Base):
     recall later. Embedding every turn would be pure cost for a transcript
     nobody searches.
 
-    WHY `directive_id` (the originating module's own session id, not a
-    Brain-minted one): the module already assigns one id for the whole
-    conversation's lifetime, and that id is the one thing every leg of this
-    feature already agrees on. Minting a second id in Brain would just be a
-    second name for the same session."""
+    WHY `directive_id` (the tracker's id, not a Brain-minted session id):
+    the tracker Hub already assigns a `converse`-kind Directive one id for
+    its whole lifetime, and that id is the one thing every leg of this
+    feature (Hub, Warden, Кая) already agrees on. Minting a second id in
+    Brain would just be a second name for the same session."""
 
     __tablename__ = "tunnel_messages"
 

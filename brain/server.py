@@ -57,6 +57,8 @@ from brain.memory import MemoryStore
 from brain.panel import PANEL_HTML
 from brain.provenance import current_actor_id, current_actor_slug
 from brain.registry import ToolRegistry
+from brain.tracker_client import TrackerClient, TrackerUnreachable
+from brain.tracker_panel import TRACKER_PANEL_HTML
 from brain.tunnel import TunnelStore
 
 logger = logging.getLogger(__name__)
@@ -137,6 +139,7 @@ class BrainServer:
         delivery=None,
         module_event_token: str = "",
         default_delivery_slug: str = "",
+        tracker: TrackerClient | None = None,
         tunnel: TunnelStore | None = None,
     ) -> None:
         self._registry = registry
@@ -155,7 +158,11 @@ class BrainServer:
         self._delivery = delivery
         self._module_event_token = module_event_token
         self._default_delivery_slug = default_delivery_slug
-        # Write side of the tunnel transcript. Defaults to
+        # Read-only client to the tracker Hub's HTTP API (the mobile
+        # dashboard). None when no tracker is configured — its routes then
+        # answer 503 rather than crashing.
+        self._tracker = tracker
+        # Write side of the "позови альфреда" tunnel transcript. Defaults to
         # a real store (it needs no external client, just Brain's own DB) so
         # callers don't have to wire up a no-op for tests that don't care.
         self._tunnel = tunnel if tunnel is not None else TunnelStore()
@@ -184,6 +191,12 @@ class BrainServer:
         app.router.add_get("/admin/backups", self._admin_backups_list)
         app.router.add_post("/admin/backups", self._admin_backups_create)
         app.router.add_post("/admin/modules/refresh", self._admin_modules_refresh)
+        # --- Mobile tracker dashboard (read-only, proxied to the tracker Hub) ---
+        app.router.add_get("/admin/tracker", self._tracker_panel)
+        app.router.add_get("/admin/tracker/overview", self._tracker_overview)
+        app.router.add_get("/admin/tracker/projects", self._tracker_projects)
+        app.router.add_get("/admin/tracker/tasks", self._tracker_tasks)
+        app.router.add_get("/admin/tracker/activity", self._tracker_activity)
         # --- enrollment (device pairing) ---
         app.router.add_post("/enroll", self._enroll_request)
         # POST (was GET): the secret travels in the body, not the query string —
@@ -253,12 +266,12 @@ class BrainServer:
         )
 
     async def _module_event(self, request: web.Request) -> web.Response:
-        """A MODULE asks Brain to tell an agent something.
+        """A MODULE asks Brain to tell an agent something (tracker v2, Step 5).
 
         WHY this route exists at all — it is the one inversion in the system.
         Everywhere else the flow is agent → Brain → module, and Brain dials
-        modules. But a module can genuinely originate news of its own: some
-        background job finished, or something needs the owner to decide. That
+        modules. But the tracker Hub genuinely originates news: a project's PR
+        is ready, or one of its agents needs the owner to decide something. That
         has to reach Кая, and the alternative — letting the module push straight
         to the agent — would mean every module learning agents' addresses and
         the delivery token. So the module says WHAT happened, and Brain, which
@@ -308,9 +321,9 @@ class BrainServer:
         return web.json_response({"ok": True, "agent": slug})
 
     async def _tunnel_message(self, request: web.Request) -> web.Response:
-        """A module logs one turn of a direct-but-logged agent tunnel — the
-        dialogue itself goes straight between the two agents, this call is
-        only the transcript write. Same shared secret as /event: both are a
+        """The tracker Hub logs one "позови альфреда" turn (direct-but-logged
+        — the dialogue itself goes straight Кая<->Warden, this call is only
+        the transcript write). Same shared secret as /event: both are a
         module telling Brain something, not an agent acting through Brain.
         """
         if not self._module_event_token or not secrets.compare_digest(
@@ -496,6 +509,59 @@ class BrainServer:
         return web.json_response(
             {"modules": summary, "tools_total": len(self._registry.all())}
         )
+
+    # ----- mobile tracker dashboard (Feature: read-only tracker proxy) -----
+
+    async def _tracker_panel(self, request: web.Request) -> web.Response:
+        """Serve the mobile-first tracker dashboard. Same no-secrets-in-the-page
+        pattern as _panel: the admin token is typed in and sent as the Bearer
+        on each API call."""
+        return web.Response(text=TRACKER_PANEL_HTML, content_type="text/html")
+
+    async def _tracker_proxy(self, path: str, params: dict | None = None) -> web.Response:
+        if self._tracker is None:
+            return web.json_response({"error": "tracker not configured"}, status=503)
+        try:
+            data = await self._tracker.get(path, params)
+        except TrackerUnreachable as e:
+            return web.json_response({"error": str(e)}, status=503)
+        return web.json_response(data)
+
+    async def _tracker_overview(self, request: web.Request) -> web.Response:
+        """One combined call for the dashboard's first paint: project count and
+        a directive-status breakdown, computed from the same two calls the
+        desktop tracker panel already makes separately."""
+        if not self._is_admin(request):
+            return web.json_response({"error": "unauthorized"}, status=401)
+        if self._tracker is None:
+            return web.json_response({"error": "tracker not configured"}, status=503)
+        try:
+            projects = await self._tracker.get("/projects")
+            tasks = await self._tracker.get("/tasks")
+        except TrackerUnreachable as e:
+            return web.json_response({"error": str(e)}, status=503)
+        counts: dict[str, int] = {}
+        for t in tasks.get("tasks", []):
+            counts[t["status"]] = counts.get(t["status"], 0) + 1
+        return web.json_response(
+            {"projects": len(projects.get("projects", [])), "task_counts": counts}
+        )
+
+    async def _tracker_projects(self, request: web.Request) -> web.Response:
+        if not self._is_admin(request):
+            return web.json_response({"error": "unauthorized"}, status=401)
+        return await self._tracker_proxy("/projects")
+
+    async def _tracker_tasks(self, request: web.Request) -> web.Response:
+        if not self._is_admin(request):
+            return web.json_response({"error": "unauthorized"}, status=401)
+        params = {k: v for k, v in request.query.items() if k in ("project", "status")}
+        return await self._tracker_proxy("/tasks", params or None)
+
+    async def _tracker_activity(self, request: web.Request) -> web.Response:
+        if not self._is_admin(request):
+            return web.json_response({"error": "unauthorized"}, status=401)
+        return await self._tracker_proxy("/activity")
 
     # ----- enrollment (device pairing) -----
 
