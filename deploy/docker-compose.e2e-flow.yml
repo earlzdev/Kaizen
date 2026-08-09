@@ -1,0 +1,54 @@
+# =============================================================================
+# E2E flow-tier overlay — docker-compose.e2e-flow.yml (docs/e2e/README.md §8)
+# =============================================================================
+# WHAT: layers on TOP of docker-compose.e2e.yml (contract tier) — adds the
+#       fake-LLM (`infra/e2e/fake_llm.py`) and publishes postgres so the HOST
+#       test process can talk to it directly.
+#
+# WHY no `kaya` service here: the "real Кая" this tier drives is
+# `agents.core.Agent` + the REAL `agents/kaya/connector.py::build_router()`,
+# constructed and run BY THE TEST PROCESS itself (tests/e2e/fakes/fake_telegram.py
+# feeds it synthetic updates) — proven with a live spike this session:
+# build_router() never constructs a Bot itself, only touches `message.bot.send_*`,
+# so swapping the SESSION a real aiogram.Bot uses is enough; no product code
+# changes needed. A separate `kaya` container polling a real Telegram token
+# would be the wrong shape for this tier and was deliberately not added.
+#
+# WHY postgres gets a published port here but not in the contract-tier overlay:
+#       contract tier only ever goes through Brain's HTTP front door. Flow tier's
+#       "real Кая" needs `agents/kaya/history.py::DbHistory` to reach the `kaya`
+#       logical database directly from the host test process — there is no Кая
+#       container to reach it from the inside.
+#
+# HOW to run:
+#   make e2e-secrets
+#   make e2e-up-flow    # also creates+migrates the `kaya` logical DB (no kaya
+#                        # container ever boots to do it itself — see the
+#                        # Makefile target)
+#   pytest tests/e2e/flow/test_conversation.py -v
+#   make e2e-down       # same teardown as contract tier — one compose project
+# =============================================================================
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:15432:5432"
+
+  fake-llm:
+    container_name: kaizen-e2e-fake-llm
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile
+    command: python -m infra.e2e.fake_llm
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8790/health', timeout=3)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_interval: 2s
+      start_period: 15s
+    ports:
+      # Host-side test process constructs agents.core.llm.AnthropicClient
+      # itself (it plays Кая's role — see the WHY above) and needs
+      # ANTHROPIC_BASE_URL to resolve here from outside the compose network.
+      - "127.0.0.1:18790:8790"

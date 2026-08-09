@@ -1,0 +1,21 @@
+# Secrets — .env is real values and must never be committed. `.env.example` is
+# the contract and IS committed.
+.env
+*.pem
+*.key
+{{SECRETS_GITIGNORE_BLOCK}}
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# The fleet's own scratch
+.claude/worktrees/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp

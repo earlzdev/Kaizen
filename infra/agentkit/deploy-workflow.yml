@@ -1,0 +1,47 @@
+# =============================================================================
+# Deploy pipeline — .github/workflows/deploy.yml
+# =============================================================================
+# WHAT: Redeploys this project's prod stack whenever `{{DEPLOY_BRANCH}}` moves
+#       (i.e. the PR `/deploy` opens from `{{MAIN_BRANCH}}` gets merged). Runs
+#       on a SELF-HOSTED runner registered directly on the prod machine — no
+#       SSH leg, the runner IS the deploy target, so `{{DEPLOY_CMD}}` runs
+#       locally against that host's own `.env`.
+#
+# WHY the "stage .env" step: `actions/checkout` defaults to `clean: true`,
+#       which runs `git clean -ffdx` in the workspace on every run — `-x`
+#       deletes gitignored files, so a `.env` left inside the checkout is
+#       wiped before `{{DEPLOY_CMD}}` ever runs. The real `.env` lives
+#       OUTSIDE the workspace (`$HOME/{{PROJECT}}-deploy.env`, placed there
+#       out-of-band, never in git) and is copied in fresh on every run.
+#
+# HOW: register the runner with label `{{DEPLOY_RUNNER_LABEL}}` on whatever
+#      machine becomes prod (repo -> Settings -> Actions -> Runners), and
+#      place `$HOME/{{PROJECT}}-deploy.env` there once; every push to
+#      `{{DEPLOY_BRANCH}}` then redeploys automatically.
+# =============================================================================
+
+name: Deploy
+
+concurrency:
+  group: {{PROJECT}}-deploy
+  cancel-in-progress: false
+
+on:
+  push:
+    branches: [{{DEPLOY_BRANCH}}]
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, {{DEPLOY_RUNNER_LABEL}}]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage .env
+        run: cp "$HOME/{{PROJECT}}-deploy.env" .env
+
+      - name: Deploy
+        # Block scalar, not `run: {{DEPLOY_CMD}}` — deploy_cmd is authored per
+        # project (project.json), and a value containing `: ` or ` #` would
+        # otherwise be parsed as YAML instead of passed through as shell text.
+        run: |
+          {{DEPLOY_CMD}}

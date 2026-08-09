@@ -1,0 +1,73 @@
+# .e2e/profile.yml — how THIS project does e2e.
+#
+# WHAT: The per-repo skeleton for docs/e2e/README.md §5's five questions: how
+#       to boot, how to know it's ready, how to reset/isolate, which secrets,
+#       how to run one test.
+# WHY:  companion to docs/e2e/command/e2e.md (the METHOD — identical
+#       everywhere). This file is the opposite: everything here is specific
+#       to this one repo, and it changes with the code, not with the kit.
+# HOW to read it: fill every <angle-bracket> placeholder. This file uses none
+#       of agentkit's own double-brace slots — it is filled in by a human (or
+#       `/e2e`'s own interview), never substituted by
+#       infra/agentkit/render.py, EXCEPT
+# `env.mode` and `boot.up`/`down`/`timeout` on a project scaffolded with
+# `"e2e": true` (which forces `dind: true`): agentkit pre-fills those four
+# because they are already known the moment DinD is wired in (see
+# infra/agentkit/MANIFEST.md, "E2E" and "DinD" sections). `boot.ready`/
+# `reset`, `run.*`, `needs` and `boundary` still need the interview.
+
+kit_version: 1
+
+env:
+  # local  — the agent boots the stack in its own workspace (needs a docker
+  #          socket it can reach — see "dind" below for the usual way to get
+  #          one without mounting the host's).
+  # dind   — this project was scaffolded with a Warden + `dind: true`
+  #          (infra/agentkit/MANIFEST.md, "DinD" section). The coding agent
+  #          already runs *inside* the `warden` container, which already has
+  #          DOCKER_HOST pointed at a sibling `dind` engine — so `boot.*`
+  #          below are plain `docker compose` strings the agent runs directly.
+  #          No ssh, no remote host, no separate execution channel. Two traps:
+  #          the stack runs on `dind`'s OWN filesystem, so a bind mount meant
+  #          to reach `/repo` sees nothing there; and a published port lands
+  #          on the `dind` container, so `boot.ready` polls
+  #          `http://<project>-dind:<port>/...`, never `localhost`.
+  # remote — a shared box reached over a pinned, forced-command SSH channel
+  #          (docs/e2e/README.md §7). Not built yet; only relevant for a
+  #          project with no Warden of its own. Documented as a fallback in
+  #          docs/e2e/SETUP.md, not wired into any kit today.
+  # ci     — a CI runner. Cleanest secrets story, slowest fix-loop.
+  mode: <local | dind | remote | ci>
+  isolation: <per-run | shared>   # per-run: every run gets a clean slate
+
+boot:
+  up:      "<how to bring the environment up — e.g. docker compose -f deploy/docker-compose.yml up -d>"
+  ready:   "<a command that succeeds only once the environment is actually ready — polled, never slept on>"
+  timeout: <seconds, e.g. 120>
+  reset:   "<how to reset state between runs, or 'none' when isolation is per-run>"
+  down:    "<how to tear the environment down>"
+
+run:
+  all:       "<run the whole e2e suite>"
+  one:       "<run exactly one scenario — {file} and {name} are substituted by /e2e>"
+  write_to:  "<where new scenario files go, e.g. tests/e2e/scenarios/>"
+  report:    "<machine-readable result path, e.g. junit:.e2e/artifacts/{run}/results.xml>"
+  artifacts: "<where logs/screenshots/traces land on failure, e.g. .e2e/artifacts/{run}/>"
+  on_fail:   ["<commands to run before giving up — e.g. dump container logs>"]
+
+needs:
+  # One entry per secret/credential/test account a scenario might need.
+  # `where: host-env` — already present in the environment; the agent never
+  # reads the value, a missing key just fails the run by name.
+  # `where: ask-human` — the agent asks once, and the value never gets
+  # written into the repo.
+  - key:   "<ENV_VAR_NAME>"
+    where: "<host-env | ask-human>"
+    why:   "<why a scenario needs this>"
+
+boundary:
+  # The honesty section — copied into every scenario's own docstring, not just
+  # kept here. Every "end-to-end" test stops somewhere; say where.
+  real:     ["<services actually exercised>"]
+  stubbed:  ["<services replaced by a fake/stub>"]
+  external: ["<real third-party services a scenario may touch, e.g. a test-mode payment API>"]

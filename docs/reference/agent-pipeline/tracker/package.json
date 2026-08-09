@@ -1,0 +1,14 @@
+{
+  "name": "yourproject-tracker",
+  "version": "1.0.0",
+  "description": "YourProject autonomous dev tracker & notification service",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --experimental-sqlite server.js",
+    "dev": "node --experimental-sqlite --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "js-yaml": "^4.1.0"
+  }
+}

@@ -1,0 +1,138 @@
+# =============================================================================
+# {{PROJECT}} Warden stack — deploy/warden/docker-compose.yml
+# =============================================================================
+# WHAT: Runs this project's Warden and its agent fleet, joined to the Kaizen
+#       network so it can reach the Hub at tracker:9104 and the Hub can dial it
+#       back at {{GRPC_ADDR}}.
+#
+# HOW:  ALWAYS with --env-file, from THIS directory (deploy/warden/):
+#         cd deploy/warden && docker compose --env-file .env -f docker-compose.yml up -d
+#       `make up`, run from this same directory, does this for you — see
+#       deploy/warden/Makefile. `--env-file` is resolved relative to the
+#       CURRENT DIRECTORY, so running compose from anywhere else (e.g. the
+#       repo root) reads the wrong `.env` — or none — and every ${VAR:-}
+#       silently becomes empty, dropping the fleet to local-only with no
+#       error anywhere. The volume mounts below (`../..`, `../../...`) are
+#       resolved relative to THIS FILE's own directory regardless of where
+#       compose is invoked from, so those stay correct either way.
+#
+#       Note also that compose substitutes from the SHELL environment too, and
+#       the shell wins over the file. A variable exported in your shell silently
+#       overrides `.env`.
+# =============================================================================
+
+name: {{PROJECT}}-warden
+
+services:
+  warden:
+    container_name: {{PROJECT}}-warden
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+    # Run the Warden FROM THE MOUNT rather than from the image's copy.
+    #
+    # WHY: with `COPY warden.py` + `CMD ["python","warden.py"]`, the running
+    # process uses a snapshot while the mounted repo holds the current source —
+    # two files silently diverging, and `git pull` appearing to do nothing.
+    # Every one-line fix then needed an image rebuild, sequenced against
+    # whatever Directive was running, because recreating the container kills the
+    # CLI mid-run and the Hub requeues the work. From the mount, an update is
+    # `git pull && docker restart`.
+    #
+    # THE COST, stated rather than discovered: the container is no longer
+    # self-contained. Start it mid-checkout and it runs a half-written file.
+    # That is acceptable when the repo and the container share a machine, and
+    # not otherwise — the image's own copy stays as the documented fallback:
+    #   command: ["python", "/app/warden.py"]
+    # This removes the REBUILD, not the mid-run interruption.
+    command: ["python", "/repo/deploy/warden/warden.py"]
+
+    # Run as the owner's uid/gid, not root.
+    #
+    # WHY: the fleet works in a bind mount. As root, every file and git object
+    # it creates is root-owned, and the owner's next `git add` fails with
+    # "insufficient permission for adding an object to repository database
+    # .git/objects" — an error that names none of this. `sudo chown -R` fixes it
+    # until the next Directive commits.
+    #
+    # HOST_UID/HOST_GID come from .env (the Makefile fills them from `id -u`).
+    # The state volume is created root-owned, so it needs a ONE-TIME:
+    #   docker run --rm -v {{PROJECT}}-warden-state:/state alpine chown -R $(id -u):$(id -g) /state
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+
+    environment:
+      HUB_ADDR: "tracker:9104"
+      PROJECT_NAME: "{{PROJECT}}"
+      # What the Hub dials to reach us. Must match the container name on the
+      # shared network, or dispatch silently never arrives.
+      GRPC_ADDR: "{{GRPC_ADDR}}"
+      BIND_ADDR: "0.0.0.0:9200"
+      REPO_ROOT: "/repo"
+      STATE_DIR: "/state"
+      MAX_CONCURRENT: "{{MAX_CONCURRENT}}"
+      # The vendored kit lives in the MOUNT too, so re-vendoring also stops
+      # needing a rebuild.
+      PYTHONPATH: "/repo/deploy/warden/vendor"
+      # HOME must be somewhere the non-root user above can actually write —
+      # git config, ~/.git-credentials, gh's config and the CLI's state all
+      # live under it.
+      HOME: "/state"
+      CLAUDE_CONFIG_DIR: "/state/claude"
+      # CRITICAL: without this the CLI "migrates" itself into the mounted config
+      # directory, and the next volume wipe deletes the binary.
+      DISABLE_AUTOUPDATER: "1"
+      REASONING_EFFORT: "${REASONING_EFFORT:-low}"
+      GH_TOKEN: "${GH_TOKEN:-}"
+      GIT_USER_NAME: "${GIT_USER_NAME:-}"
+      GIT_USER_EMAIL: "${GIT_USER_EMAIL:-}"
+{{DIND_ENV_BLOCK}}
+
+    volumes:
+      - ../..:/repo
+
+      # The owner's real `.env` files sit inside that read-write mount, and the
+      # rule "never read or print .env" is enforced by nothing. One `grep`
+      # across the tree for a hostname, one `cat` in a debugging step, and a
+      # live GH_TOKEN is in a transcript. There are TWO real `.env` files to
+      # cover — the app's at the repo root and the Warden's own, right next to
+      # this compose file — and both land inside /repo through the mount above.
+      #
+      # So mount the TEMPLATE over each: inside the container /repo/.env and
+      # /repo/deploy/warden/.env both hold committed fake values. Nothing
+      # breaks — the Warden receives its real variables through `environment:`
+      # above, resolved from the real deploy/warden/.env on the host by
+      # --env-file.
+      #
+      # A rule an agent is asked to follow is a request; a mount is a fact.
+      - ../../.env.example:/repo/.env:ro
+      - ./.env.example:/repo/deploy/warden/.env:ro
+
+      # Enrollment secret, issued token, conversation window, CLI login.
+      - {{PROJECT}}-warden-state:/state
+
+    networks:
+      - kaizen
+{{DIND_NETWORK_ITEM}}
+{{DIND_DEPENDS_ON_BLOCK}}
+
+{{DIND_SERVICE_BLOCK}}
+
+networks:
+  kaizen:
+    # Created by the main Kaizen stack; this project only joins it.
+    name: kaizen_default
+    external: true
+{{DIND_NETWORK_DEF_BLOCK}}
+
+volumes:
+  {{PROJECT}}-warden-state:
+    # Pinned so the volume is CALLED what every document says it is called.
+    # Without this, the top-level `name:` prefixes it
+    # ({{PROJECT}}-warden_{{PROJECT}}-warden-state), and the one-time chown
+    # command in the README silently creates-and-chowns a brand-new empty
+    # volume while the real one stays root-owned — the crash loop continues
+    # and the owner believes the fix was applied.
+    name: {{PROJECT}}-warden-state
+{{DIND_VOLUME_DEF_BLOCK}}

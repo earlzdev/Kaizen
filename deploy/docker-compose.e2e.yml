@@ -1,0 +1,75 @@
+# =============================================================================
+# E2E overlay — docker-compose.e2e.yml (contract tier only — see docs/e2e/README.md §8)
+# =============================================================================
+# WHAT: an isolated compose PROJECT (`name: kaizen-e2e`, below) for the
+#       `contract` test tier — straight at Brain's front door (MCP/HTTP) "as
+#       if an agent", no Кая, no LLM at all (Brain never calls one — see
+#       CLAUDE.md's service-isolation rule). Only postgres/brain/tracker/
+#       tools come up; kaya/backup are removed entirely (`!reset
+#       null` below), not just left unconfigured, so an e2e run can never
+#       reach real Telegram or attempt a real backup.
+#
+# WHY a separate compose PROJECT, not just an env override: a different
+#       `name:` gives every container, network and volume its own namespace —
+#       `docker compose -p kaizen ...` (prod/dev) and this e2e stack can run
+#       on the same host at the same time without colliding, and `down -v`
+#       here can never touch prod's `pgdata`.
+#
+# SECRETS: run with `--env-file .env.e2e.generated`, never `.env` — see
+#       docs/e2e/README.md §8 and `make e2e-secrets`. Every service's
+#       `env_file:` is overridden the same way (`!override`, replacing the
+#       base file's `../.env` entirely rather than adding to it).
+#
+# HOW to run:
+#   make e2e-secrets   # regenerate throwaway tokens into .env.e2e.generated
+#   make e2e-up        # boot the stack
+#   make e2e-down      # tear it down (add -v by hand for a clean-slate reset)
+# =============================================================================
+
+name: kaizen-e2e
+
+services:
+  # container_name: in the base file is a FIXED name, not namespaced by
+  # compose project — left alone, this stack's containers collide with a
+  # running dev/prod stack's identically-named ones. Every kept service gets
+  # a distinct kaizen-e2e-* name so both can run on the same host at once.
+  postgres:
+    container_name: kaizen-e2e-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+  tracker:
+    container_name: kaizen-e2e-tracker
+    env_file: !override
+      - ../.env.e2e.generated
+
+  tools:
+    container_name: kaizen-e2e-tools
+    env_file: !override
+      - ../.env.e2e.generated
+
+  brain:
+    container_name: kaizen-e2e-brain
+    env_file: !override
+      - ../.env.e2e.generated
+    ports:
+      # Host-side test runner needs to reach Brain's MCP/HTTP front door.
+      # Off the dev overlay's 8772 so both stacks can run at once without a
+      # port clash.
+      - "127.0.0.1:18772:8772"
+
+  # Contract tier never touches Telegram or real backups —
+  # removed outright (not just unconfigured), so an e2e run has no path to
+  # either even by mistake.
+  kaya: !reset null
+  backup: !reset null
+
+volumes:
+  # Auto-namespaced under the `kaizen-e2e` project (line above), so this is
+  # already a distinct volume from prod's `kaizen_pgdata` — kept warm between
+  # test runs (docs/e2e/README.md §8: a full up/down per test costs minutes).
+  # Removed volumes for the services dropped above.
+  claude-auth: !reset null
+  kaya-state: !reset null

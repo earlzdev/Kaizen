@@ -1,0 +1,77 @@
+# =============================================================================
+# Deploy pipeline — .github/workflows/deploy.yml
+# =============================================================================
+# WHAT: Redeploys the prod stack whenever the `deploy` branch moves (i.e. the
+#       PR tools/deploy/tool.py opens from `main` gets merged). Runs on a
+#       SELF-HOSTED runner registered directly on the prod machine — see
+#       docs/deploy-pipeline.md for how to stand one up. No SSH leg: the
+#       runner IS the deploy target, so `docker compose` here runs locally on
+#       that host against its own `.env` (placed there out-of-band, never in
+#       git — the repo checkout only ever has `.env.example`).
+#
+# WHY `docker compose up` directly and not `make up prod`: that target also
+#       runs infra/scripts/approve.sh, which prompts on a real TTY for any
+#       agent newly waiting to enroll. A CI runner has no TTY — fine for the
+#       steady-state case (no pending agents), but the wrong place to risk a
+#       hang. Approving a new agent stays a manual `make approve` on the host.
+#
+# WHY a "Stage .env" step: `actions/checkout` defaults to `clean: true`,
+#       which runs `git clean -ffdx` in the workspace on every run — `-x`
+#       deletes gitignored files, so a `.env` left inside the checkout is
+#       wiped before this job ever runs. Worse, `--env-file` on the `docker
+#       compose` command line only feeds *interpolation* variables
+#       (`${POSTGRES_USER}` etc in the compose YAML itself) — every service
+#       ALSO declares `env_file: - ../.env` (deploy/docker-compose.yml),
+#       resolved relative to the compose file, i.e. always `<checkout>/.env`,
+#       regardless of what `--env-file` points at. So the real secrets a
+#       container reads at runtime come only from a `.env` that physically
+#       exists in the checkout at compose time — the copy below is not
+#       optional. The source of truth lives OUTSIDE the workspace
+#       (`$HOME/kaizen-deploy.env`, placed there out-of-band, never in git;
+#       see docs/deploy-pipeline.md §3) and is copied in fresh on every run.
+#
+# HOW: label the runner `kaizen-prod` when you register it (docs/deploy-
+#      pipeline.md); every push to `deploy` then redeploys automatically.
+# =============================================================================
+
+name: Deploy
+
+concurrency:
+  group: kaizen-deploy
+  cancel-in-progress: false
+
+on:
+  push:
+    branches: [deploy]
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, kaizen-prod]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage .env
+        run: cp "$HOME/kaizen-deploy.env" .env
+
+      - name: Build and start the prod stack
+        run: docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+
+      - name: Verify every service is healthy
+        # 70 * 5s = 350s — must clear kaya's/kuzya's 300s start_period
+        # (deploy/docker-compose.yml), the longest of any service. A shorter
+        # window here would fail a redeploy that is still legitimately inside
+        # Docker's own startup grace, not actually unhealthy.
+        run: |
+          set -euo pipefail
+          COMPOSE="docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml"
+          for i in $(seq 1 70); do
+            bad="$($COMPOSE ps --all --format '{{.Name}} {{.State}} {{.Health}}' | awk '$2 != "running" || ($3 != "" && $3 != "healthy") {print}')"
+            if [ -z "$bad" ]; then
+              echo "All services healthy."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Services never became healthy:"
+          $COMPOSE ps --all
+          exit 1
