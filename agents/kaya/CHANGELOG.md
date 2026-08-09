@@ -12,6 +12,17 @@ here — this file is for what changed about how she acts or what she can do.
 > than translated. If you need the untranslated, unpruned original, it's in
 > this repo's git history before that date.
 
+## 2026-08-10
+
+- Added «по-честному» to the shared cliché ban list (`agents/core/locales/ru/cliches.json`,
+  «Мета-разговор о себе» section) — same declared-sincerity slop class as
+  «сразу честно». Applies to all agents using this list, not just Кая.
+- Memory soul section: Кая no longer announces a memory save ("saved to
+  memory", "в память записала") — proactive saves stay silent, she only
+  mentions what she remembers if asked. Owner found the announcement
+  unnatural/robotic. `Tools and errors` now distinguishes explicit actions
+  (reminders/notes — one-line confirmation stays) from silent ones (memory).
+
 ## 2026-08-09
 
 - New `## Notes` soul section: on an explicit "note this down" (never
