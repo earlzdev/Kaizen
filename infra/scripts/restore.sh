@@ -53,7 +53,7 @@ read -r -p "Type 'yes' to proceed: " ok
 ID_ABS="$(cd "$(dirname "$IDENTITY")" && pwd)/$(basename "$IDENTITY")"
 
 echo "Stopping app services (postgres + backup stay up)…"
-docker compose --env-file .env -f deploy/docker-compose.yml stop kaya brain tools
+docker compose --env-file .env -f deploy/docker-compose.yml stop kaya brain mentor tracker tools
 
 echo "Restoring from $KEY …"
 docker compose --env-file .env -f deploy/docker-compose.yml run --rm -v "${ID_ABS}:/tmp/age_id:ro" \

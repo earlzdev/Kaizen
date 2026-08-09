@@ -7,7 +7,7 @@
 # WHY: cancel_reminder is new (owner's ask, 2026-07-29): the store could
 #       always delete a reminder, but no TOOL exposed it, so agents could
 #       create reminders and never take one back.
-# HOW: build_tools(store, episodes) with a fake embedder; the scratch-DB
+# HOW: build_tools(store, episodes, notes) with a fake embedder; the scratch-DB
 #       sessionmaker comes from conftest.py (skips without Postgres).
 # =============================================================================
 
@@ -15,6 +15,7 @@ import pytest
 
 from brain.episodes import EpisodeStore
 from brain.memory import MemoryStore
+from brain.notes import NoteStore
 from brain.registry import ToolRegistry
 from brain.tools import build_tools
 
@@ -31,8 +32,9 @@ def registry(scratch_sessions) -> ToolRegistry:
     embedder = FakeEmbedder()
     store = MemoryStore(embedder, session_factory=scratch_sessions)
     episodes = EpisodeStore(embedder, session_factory=scratch_sessions)
+    notes = NoteStore(embedder, session_factory=scratch_sessions)
     reg = ToolRegistry()
-    reg.register_all(build_tools(store, episodes))
+    reg.register_all(build_tools(store, episodes, notes))
     return reg
 
 

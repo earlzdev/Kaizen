@@ -1,0 +1,344 @@
+// ============================================================================
+// Tracker v2 contract — infra/proto/warden.proto
+// ----------------------------------------------------------------------------
+// WHAT: The two gRPC services that connect the Kaizen tracker ("the Hub") to a
+//       project's agent fleet, per docs/tracker-architecture.md §3:
+//         Warden — served by EACH project, dialed by the Hub. Dispatch/Cancel/
+//                  Describe/Health: the Hub hands work down and controls it.
+//         Hub    — served by the KAIZEN tracker, dialed by Wardens. Register/
+//                  PushStatus/PushReport/AskOwner/Heartbeat: the project
+//                  reports up and asks the owner questions.
+//
+// WHY BOTH directions (and not one long-lived stream):
+//   The Hub initiates dispatch so a Directive reaches a project with no polling
+//   latency; the project initiates status/reports/questions because only it
+//   knows when something changed. This works because everything is on one
+//   machine and one compose network. If a project ever has to live elsewhere,
+//   ONLY the Hub→Warden leg breaks — swap that leg for a Warden-initiated
+//   long-lived stream and everything else stands. That is the seam.
+//
+// WHY the project token rides in gRPC METADATA, not in the messages:
+//   Every Warden→Hub call carries it, so a field on every message would be
+//   noise that is easy to forget on a new RPC. Metadata is also where the
+//   analogous credential lives for Brain↔agent (an HTTP Authorization header),
+//   so one habit covers both. Key: "authorization", value: "Bearer <token>".
+//   The Hub resolves it to a project and REJECTS any directive_id that project
+//   does not own — the same guarantee the v1 HTTP report path gives.
+//
+// WHY ids are int64 and task_id is a string: `id` is the Hub's Directive
+//   primary key (the tracked unit crossing the trust boundary); `task_id` is
+//   the PROJECT-side name for the work (e.g. "key-rotation") that names its
+//   docs/tracker/{task_id}/ tree. Two scopes, two types, no confusion.
+//
+// HOW to regenerate: edit this file, run `bash infra/proto/gen.sh`, commit
+//   infra/proto/gen/.
+// ============================================================================
+
+syntax = "proto3";
+
+package kaizen.warden;
+
+// ---------------------------------------------------------------------------
+// Warden — served by each project, dialed by the Hub.
+// ---------------------------------------------------------------------------
+service Warden {
+  // Hand a Directive to the project. Returns IMMEDIATELY with accept/reject;
+  // execution is async and reported back over the Hub service. A Warden that
+  // blocks here would make the Hub's dispatcher serial across all projects.
+  rpc Dispatch (Directive)       returns (DispatchAck);
+
+  // Abort a running Directive. Best-effort: kills the pipeline, and
+  // deliberately leaves the repo and the docs/tracker/ files as they are, so
+  // the owner can inspect what the fleet had done up to that point.
+  rpc Cancel   (CancelRequest)   returns (CancelAck);
+
+  // Capability manifest — what this project is and what it can be asked to do.
+  // The Hub also gets this on Register; Describe is for asking again later
+  // without waiting for the project to reboot.
+  rpc Describe (DescribeRequest) returns (ProjectManifest);
+
+  // Liveness plus live occupancy. The Hub polls this to resync after its OWN
+  // restart (case 9) and to notice when an at-capacity project frees a slot.
+  rpc Health   (HealthRequest)   returns (WardenHealth);
+
+  // Ask the project to restart itself. The OWNER asks; the Hub only relays.
+  //
+  // WHY the project restarts ITSELF rather than the Hub restarting it: the Hub
+  // dials projects across a network and has no business holding a Docker socket
+  // or an ssh key for someone else's host — that is root-equivalent power over
+  // every machine that ever registered. Here the blast radius stays inside the
+  // project: it decides what "restart" means for it, and it may refuse.
+  //
+  // It exists because a wedged fleet is otherwise unrecoverable without the
+  // owner walking to the host: the process is alive (so nothing expires) but
+  // nothing is moving.
+  rpc Restart  (RestartRequest)  returns (RestartAck);
+
+  // Push one turn of a live conversation into an open `converse` Directive
+  // (tracker v2 follow-up: the "позови альфреда" tunnel). Ack-only from the
+  // Hub's point of view — the reply arrives later over Hub.PushChatMessage,
+  // since a Warden turn can take as long as a `claude` CLI call takes, the
+  // same reason Dispatch above returns immediately instead of blocking.
+  rpc DeliverMessage (ChatMessage) returns (Ack);
+}
+
+// The owner asking a project to pick itself up off the floor.
+message RestartRequest {
+  // Free text, kept for the record and shown to the owner: "stuck after the
+  // host slept", "wedged in review". A restart with no reason is how a habit
+  // of restarting-instead-of-diagnosing starts.
+  string reason       = 1;
+  // "jobs"  — drop in-flight work, stay up, go idle. The default: it is the
+  //           cheapest thing that unwedges a fleet, and it keeps the process
+  //           (and its logs) alive for inspection.
+  // "self"  — after dropping the work, exit so the container's restart policy
+  //           brings up a fresh process. For a Warden whose own state is bad.
+  string scope        = 2;
+  string requested_by = 3;   // "owner via Кая", "admin panel" — for the log
+}
+
+message RestartAck {
+  bool   accepted           = 1;
+  string reason             = 2;   // why not, when refused
+  int32  restarting_in_sec  = 3;   // 0 for scope=jobs
+  repeated int64 dropped_directives = 4;  // what it let go of, so the Hub can requeue
+}
+
+message Directive {
+  int64  id            = 1;   // Hub-assigned; the id every report must echo
+  string kind          = 2;   // develop | fix | refactor | research | review | epic | brainstorm | analyze
+  // The owner's ACTUAL words. The project's overseer persona interprets them —
+  // the Hub deliberately does not pre-structure the request, because knowing
+  // each project's pipeline vocabulary is exactly what the overseer is for.
+  string intent        = 3;
+  string task_id       = 4;   // optional: continue an existing project-side task
+  int32  priority      = 5;   // lower runs first
+  bool   auto_merge    = 6;   // per-Directive opt-in, NEVER a global setting
+  map<string,string> meta = 7;
+  string title         = 8;   // short human label, for logs and the panel
+}
+
+message DispatchAck {
+  bool   accepted      = 1;
+  // Why it was rejected. Two values are contractual because the Hub branches
+  // on them (architecture §7 cases 2 and 3):
+  //   "at_capacity"      -> the Directive stays queued and is retried
+  //   "unsupported_kind" -> the Directive fails immediately, reason surfaced
+  // Anything else is treated as a generic rejection: fail with the text shown.
+  string reason        = 2;
+  string task_id       = 3;   // assigned by the project, or echoed back
+}
+
+message CancelRequest {
+  int64  directive_id  = 1;
+  string reason        = 2;
+}
+
+message CancelAck {
+  bool   accepted      = 1;   // false = nothing was running under that id
+  string reason        = 2;
+}
+
+message DescribeRequest {}
+
+message HealthRequest {}
+
+message ProjectManifest {
+  string name          = 1;
+  string purpose       = 2;   // one line: what this project is for
+  string description   = 3;
+  repeated string kinds = 4;  // the Directive kinds this project supports
+  repeated AgentSpec roster = 5;
+  int32  max_concurrent = 6;
+  string repo_url      = 7;
+  string default_branch = 8;
+  // host:port the Hub should dial for this project's Warden. NOT in the
+  // architecture sketch, but the Hub→Warden leg cannot exist without it: the
+  // Hub can see the peer's address on an inbound Register, but not the port
+  // the Warden LISTENS on. The project states it; the Hub stores it.
+  string grpc_addr     = 9;
+}
+
+message AgentSpec {
+  string slug = 1;   // architect-xavier, backend-dev-anderson, …
+  string name = 2;
+  string role = 3;
+  string model = 4;
+  // Which part of the project this persona works on: backend | frontend |
+  // mobile | infra | security | qa | design | research | docs | … Free text —
+  // the Hub groups by whatever a project uses rather than imposing a list.
+  //
+  // WHY declared and not inferred: a slug like `backend-infra-potts` or
+  // `security-holmes` is ambiguous, and a fleet view that quietly files
+  // someone under the wrong team is worse than one that doesn't try. The Hub
+  // DOES fall back to guessing from the slug when this is empty, so an older
+  // project still renders — but what the project says always wins.
+  string area = 5;
+  // Where this persona sits in the fleet: owner | architect | lead |
+  // developer | reviewer. A small fixed vocabulary on purpose — every project
+  // runs a different fleet with differently-named personas, and the Hub has to
+  // be able to draw a hierarchy for all of them. `role` above stays free text
+  // and is the label a human reads ("Backend Team Lead"); this is the shape.
+  //
+  // Empty is fine: the Hub infers it from the slug and role and STORES what it
+  // inferred, so a wrong guess shows up in `GET /agents` and can be corrected
+  // by declaring the right value here.
+  string tier = 7;
+  // The slug of the persona this one reports to: a dev's team lead, a lead's
+  // architect. Empty = a root of the tree. This is what makes the roster a
+  // hierarchy instead of a list, which is how the fleet actually works — an
+  // architect decomposes for leads, leads decompose for devs.
+  string reports_to = 6;
+}
+
+message WardenHealth {
+  bool  ok             = 1;
+  int32 running        = 2;
+  int32 capacity       = 3;
+  // Which Directives this project believes it is running. The Hub compares
+  // this against its own rows after a restart, so neither side has to trust
+  // its memory of what was in flight.
+  repeated int64 running_directives = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Hub — served by the Kaizen tracker, dialed by Wardens.
+// ---------------------------------------------------------------------------
+service Hub {
+  // Enrollment (architecture §5). The FIRST call carries no token: it creates a
+  // PENDING project and returns pending=true. The owner approves via Кая or the
+  // panel, and the Warden's next call is answered with the issued token. Later
+  // calls WITH a valid token just refresh the manifest and last_seen_at.
+  rpc Register   (ProjectManifest) returns (RegisterAck);
+
+  // Mirror an agent's Status upward so the panel and Кая see live progress.
+  rpc PushStatus (StatusUpdate)    returns (Ack);
+
+  // Terminal outcome of a Directive.
+  rpc PushReport (Report)          returns (Ack);
+
+  // BLOCKING by design: an agent needs the owner. The Hub records the question,
+  // marks the Directive blocked, routes it to Кая, and HOLDS THIS RPC OPEN
+  // until the owner answers or timeout_sec elapses. A timeout is a normal
+  // outcome, not an error — see Answer.answered.
+  rpc AskOwner   (Question)        returns (Answer);
+
+  // Keeps the Directive's lease alive so the sweeper doesn't requeue it.
+  // A project that stops heartbeating is, by definition, a project that died.
+  rpc Heartbeat  (HeartbeatPing)   returns (Ack);
+
+  // Push one agent reply (or a close notice) up mid-tunnel. Mirrors
+  // PushStatus's fire-and-forget shape — the Warden doesn't wait for this to
+  // return before it's free to handle the next queued message.
+  rpc PushChatMessage (ChatMessage) returns (Ack);
+}
+
+message RegisterAck {
+  // True while the owner has not approved this project yet. The Warden should
+  // back off and call Register again; nothing else it can do will help.
+  bool   pending       = 1;
+  // Issued exactly once, on the first call after approval. Empty on every
+  // other outcome — including refreshes, where the Warden already has it.
+  string token         = 2;
+  int64  project_id    = 3;
+  string message       = 4;   // human-readable status, for the Warden's log
+}
+
+message StatusUpdate {
+  int64  directive_id  = 1;
+  string task_id       = 2;
+  string agent_slug    = 3;   // architect-xavier, backend-dev-anderson, …
+  string role          = 4;
+  string state         = 5;   // idle | pending | in_progress | blocked | review | done
+  string progress      = 6;
+  string blockers      = 7;
+  string phase         = 8;   // which pipeline phase the work is in
+  // Set only on the status call that closes out an LLM turn (i.e. from
+  // run_persona_turn()) — most Status calls carry no usage at all.
+  Usage  usage         = 9;
+}
+
+// One `claude` CLI turn's token/cost accounting — mirrors agents/core's
+// TurnUsage, kept as its own message here because wardenkit has no dependency
+// on agents/core (grpcio + protobuf only).
+message Usage {
+  int64  input_tokens       = 1;
+  int64  output_tokens      = 2;
+  int64  cache_read_tokens  = 3;
+  int64  cache_write_tokens = 4;
+  double cost_usd           = 5;   // 0 when the backend didn't report one
+}
+
+message Report {
+  int64  directive_id  = 1;
+  string state         = 2;   // done | failed | cancelled | review
+  string summary       = 3;
+  repeated Artifact artifacts = 4;
+  string error         = 5;
+  string task_id       = 6;   // the project-side task id, if assigned late
+  // Decomposition of an `epic` (architecture §7 case 13): the overseer reports
+  // the epic itself done and hands back the ordered pieces it broke into. The
+  // Hub queues them under this Directive as their parent, at ascending
+  // priority so they run in the order the overseer chose.
+  //
+  // WHY they ride on the Report instead of the project queueing them itself:
+  // a project may only ever be GIVEN work — it has no authority to create it.
+  // Coming back through the Hub means the owner's queue, priorities and
+  // cancel all keep working on the children exactly as on anything else.
+  repeated ChildDirective children = 7;
+}
+
+message ChildDirective {
+  string title  = 1;
+  string intent = 2;   // the words the child's own overseer will interpret
+  // develop | fix | refactor | research | review | brainstorm | analyze.
+  // Empty (or unrecognised) becomes `develop`, and `epic` is NOT accepted here:
+  // a piece of an epic that were itself an epic would be decomposed again, and
+  // nothing else in this system bounds that depth.
+  string kind   = 3;
+}
+
+message Artifact {
+  string type          = 1;   // pr | file | dashboard | …
+  string url           = 2;
+}
+
+message Question {
+  int64  directive_id  = 1;
+  string agent_slug    = 2;
+  string text          = 3;
+  int32  timeout_sec   = 4;
+  repeated string suggested = 5;  // optional choices, so Кая can offer buttons
+}
+
+message Answer {
+  // FALSE means "nobody answered in time" — distinct from an answer that is
+  // legitimately empty. The overseer branches on this: proceed under a stated
+  // assumption, or report failed with "no answer". It must never silently
+  // guess, which is exactly why this is a bool and not an empty string.
+  bool   answered      = 1;
+  string answer        = 2;
+  int64  question_id   = 3;
+}
+
+message HeartbeatPing {
+  int64  directive_id  = 1;
+  string task_id       = 2;
+}
+
+message Ack {
+  bool   ok            = 1;
+  string message       = 2;   // why not, when ok is false
+}
+
+// One turn of a live "converse"-kind Directive — the tunnel that lets the
+// owner talk to a project's Warden directly instead of through one-shot
+// AskOwner questions. Carried in BOTH directions (Hub->Warden via
+// DeliverMessage, Warden->Hub via PushChatMessage); which fields are
+// meaningful depends on direction, same as StatusUpdate/Report already do.
+message ChatMessage {
+  int64  directive_id  = 1;   // the `converse`-kind Directive this turn belongs to
+  string text          = 2;   // owner's message, or the agent's reply
+  string agent_slug    = 3;   // speaking persona (Warden->Hub direction only)
+  bool   closed        = 4;   // true = last turn, conversation is over
+}

@@ -45,6 +45,7 @@ from brain.episodes import EpisodeStore
 from brain.memory import MemoryStore
 from brain.module_client import ModuleClient
 from brain.modules import ModuleRouter, parse_modules
+from brain.notes import NoteStore
 from brain.server import BrainServer
 from brain.sweeper import ReminderSweeper
 from brain.tools import build_registry
@@ -115,7 +116,8 @@ async def main() -> None:
     embedder = Embedder()
     await embedder.warmup()
     episodes = EpisodeStore(embedder)
-    registry = build_registry(embedder, episodes)
+    notes = NoteStore(embedder)
+    registry = build_registry(embedder, episodes, notes)
 
     # Discover module tools and merge them in (Phase 4). A module tool then
     # behaves like a built-in over MCP: same tools/list, tools/call, access-list.
@@ -152,20 +154,20 @@ async def main() -> None:
         default_delivery_slug=settings.default_delivery_agent_slug,
     )
     # A banner, not a boot refusal: Brain has other jobs (memory, tools, the
-    # panel) that stay useful without module events at all. Loud regardless of
-    # whether anything currently pushes events, since a deployment mistake
-    # that silently drops every report is not a log-level-INFO kind of
-    # problem. `${VAR:?}` and `if not value` both catch UNSET and neither
+    # panel) that stay useful without module events, whereas a module's whole
+    # purpose here is telling the owner things — which is why it refuses instead.
+    # Loud either way: this used to be one warning line among hundreds, and a
+    # deployment mistake that silently drops every report is not a log-level-INFO
+    # kind of problem. `${VAR:?}` and `if not value` both catch UNSET and neither
     # catches a `.env` copied from the template, so check for the template too.
     if is_placeholder(settings.module_event_token):
         logger.error(
             "\n"
             "=========================================================\n"
             " MODULE_EVENT_TOKEN is empty or still a template value.\n"
-            " POST /event rejects everything, so no module can push you\n"
-            " a report, question or requeue notification.\n"
-            " Set the same value in .env on Brain and on any module\n"
-            " that pushes events.\n"
+            " POST /event rejects everything, so a module CANNOT\n"
+            " tell you about reports, questions or requeues.\n"
+            " Set the SAME value in .env on Brain and the module.\n"
             "========================================================="
         )
     if not settings.enroll_token:

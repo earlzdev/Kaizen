@@ -71,13 +71,31 @@ class EnrollStatusRequest(_Body):
 class ModuleEventRequest(_Body):
     """POST /event — a module asks Brain to push a message to an agent.
 
-    `kind` is the MODULE's event kind ("question", "directive_report", ...),
-    kept for logging and for future routing; what reaches the agent is always a
-    DeliveryEvent of kind "tracker". `agent` names the target slug and defaults
-    to the configured delivery agent (Кая), so a module never has to know which
+    `kind` is the MODULE's event kind (e.g. "question", "report"), kept for
+    logging and for future routing; what reaches the agent is always the same
+    delivery event shape. `agent` names the target slug and defaults to the
+    configured delivery agent (Кая), so a module never has to know which
     agents exist — let alone where they live.
     """
 
     kind: str = Field(min_length=1, max_length=64)
     text: str = Field(min_length=1, max_length=8000)
     agent: str = ""
+
+
+class TunnelMessageRequest(_Body):
+    """POST /tunnel/message — one turn of a live direct agent-to-agent
+    tunnel, logged.
+
+    Separate from ModuleEventRequest even though both are module-to-Brain
+    calls: /event is a one-shot notable-event ping, deliberately clipped to
+    Telegram-message length; a tunnel writes on EVERY turn and must not lose
+    text to that clip. `role` is who spoke this turn, not who receives it —
+    there is no delivery decision here, only a transcript write.
+    """
+
+    directive_id: int
+    project: str = Field(min_length=1, max_length=255)
+    role: str = Field(pattern="^(owner|agent)$")
+    text: str = Field(min_length=1, max_length=20000)
+    agent_slug: str = ""

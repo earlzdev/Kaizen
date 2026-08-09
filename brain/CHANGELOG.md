@@ -9,6 +9,26 @@ Brain does or how agents/modules experience it.
 
 Created 2026-08-07; history before that is in `git log -- brain/`.
 
+## 2026-08-09
+
+- New `save_note`/`list_notes`/`search_notes`/`list_note_categories`/
+  `forget_note` tools and a `notes` table (migration
+  `f9945d1a49c6_add_notes_table`) — explicit "note this down" requests,
+  distinct from Fact/Memory: never auto-saved, organized by an
+  agent-assigned category + tags (inferred from content when the owner
+  doesn't state them) instead of only semantic recall.
+
+## 2026-08-08
+
+- New `POST /tunnel/message` — logs one turn of a live direct owner<->agent
+  conversation happening through a module (both directions). New
+  `tunnel_messages` table (migration
+  `601863742ef2_add_tunnel_messages_table`); separate from `Episode` on
+  purpose — a tunnel is many small turns per session, not one durable
+  embedded exchange, so it isn't searched or summarised, just kept so the
+  owner's primary agent doesn't lose the thread. Same shared secret as
+  `/event` (`MODULE_EVENT_TOKEN`).
+
 ## 2026-08-07
 
 - New `python -m brain.seed_profile <file>` — bulk-loads facts and profile

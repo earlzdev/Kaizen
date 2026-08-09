@@ -11,7 +11,7 @@
 #       setup changes.
 #
 # WHY lazy imports: a container runs ONE service and only installs that
-#       service's dependencies. Importing all five eagerly would make every
+#       service's dependencies. Importing all eagerly would make every
 #       service fail on somebody else's import.
 #
 # HOW: `metadata_of("brain")` / `url_of("brain")`. Add a service by adding one
