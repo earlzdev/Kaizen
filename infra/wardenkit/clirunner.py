@@ -7,7 +7,7 @@
 #       subscription is spent.
 #
 # WHY it lives in the kit and not in each project's warden.py: the first real
-#       project (hashi) hand-rolled this, and the hand-rolled version had six
+#       project hand-rolled this, and the hand-rolled version had six
 #       defects at once — stderr thrown away, the answer discarded on success, a
 #       leading `-` in the prompt parsed as a flag, no idea what a spent quota
 #       looks like, a ten-minute wait on a run that never started, and GH_TOKEN

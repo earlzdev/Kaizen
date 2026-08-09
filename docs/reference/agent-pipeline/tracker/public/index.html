@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>YourProject Dev Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+  [x-cloak] { display: none !important; }
+
+  body { background: #080f1f; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; }
+
+  .glass {
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(51, 65, 85, 0.6);
+  }
+
+  .card {
+    background: #0f1a2e;
+    border: 1px solid #1e3a5f;
+    border-radius: 12px;
+  }
+
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 99px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .type-feature    { background: #1d3a7a; color: #93c5fd; }
+  .type-bugfix     { background: #4c1515; color: #fca5a5; }
+  .type-refactor   { background: #3a2a06; color: #fcd34d; }
+  .type-brainstorm { background: #2e1a5e; color: #c4b5fd; }
+
+  .status-pending    { background: #1e293b; color: #94a3b8; }
+  .status-in_progress{ background: #0c2d4a; color: #38bdf8; }
+  .status-review     { background: #2d2206; color: #fbbf24; }
+  .status-done       { background: #0a2e1e; color: #4ade80; }
+  .status-cancelled  { background: #1a1a1a; color: #6b7280; }
+  .status-blocked    { background: #3a0a0a; color: #f87171; }
+
+  .agent-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-in_progress { background: #38bdf8; box-shadow: 0 0 6px #38bdf8; animation: pulse 1.8s infinite; }
+  .dot-done        { background: #4ade80; }
+  .dot-blocked     { background: #f87171; box-shadow: 0 0 6px #f87171; }
+  .dot-review      { background: #fbbf24; }
+  .dot-pending     { background: #475569; }
+  .dot-idle        { background: #334155; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .drag-over { border-color: #3b82f6 !important; background: #0c1f3a !important; }
+
+  .task-row { transition: background 0.15s; cursor: grab; }
+  .task-row:hover { background: #111e35; }
+  .task-row:active { cursor: grabbing; }
+
+  input, textarea, select {
+    background: #0a1628;
+    border: 1px solid #1e3a5f;
+    border-radius: 8px;
+    color: #e2e8f0;
+    padding: 8px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, textarea:focus, select:focus { border-color: #3b82f6; }
+
+  .btn-primary {
+    background: #2563eb;
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-weight: 600;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover { background: #1d4ed8; }
+
+  .btn-ghost {
+    background: transparent;
+    color: #94a3b8;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    border: 1px solid #1e3a5f;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-ghost:hover { background: #1e293b; color: #e2e8f0; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 3px; }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: #0f1a2e; border: 1px solid #1e3a5f;
+    border-radius: 10px; padding: 12px 18px;
+    font-size: 14px; z-index: 9999;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    animation: slideIn 0.2s ease;
+  }
+  @keyframes slideIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+
+  .notification-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #38bdf8;
+    box-shadow: 0 0 6px #38bdf8;
+    animation: pulse 2s infinite;
+  }
+
+  .gradient-header {
+    background: linear-gradient(135deg, #0c1f3a 0%, #080f1f 100%);
+    border-bottom: 1px solid #1e3a5f;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #475569;
+  }
+</style>
+</head>
+<body x-data="app()" x-init="init()" x-cloak>
+
+<!-- Header -->
+<header class="gradient-header px-6 py-4 flex items-center justify-between sticky top-0 z-40">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">FM</div>
+    <div>
+      <div class="font-semibold text-white text-sm">YourProject Dev Tracker</div>
+      <div class="flex items-center gap-1.5 mt-0.5">
+        <div :class="connected ? 'notification-dot' : 'w-1.5 h-1.5 rounded-full bg-red-500'"></div>
+        <span class="text-xs text-slate-500" x-text="connected ? 'live' : 'disconnected'"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <!-- Stats -->
+    <div class="hidden md:flex items-center gap-4 mr-2">
+      <template x-for="stat in taskStats">
+        <div class="text-center">
+          <div class="text-lg font-bold text-white" x-text="stat.count"></div>
+          <div class="text-xs text-slate-500" x-text="stat.label"></div>
+        </div>
+      </template>
+    </div>
+    <button @click="openModal()" class="btn-primary flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      New Task
+    </button>
+  </div>
+</header>
+
+<!-- Main layout -->
+<div class="flex h-[calc(100vh-65px)]">
+
+  <!-- Left: Agent Activity -->
+  <aside class="w-72 flex-shrink-0 border-r border-slate-800 overflow-y-auto p-4 flex flex-col gap-4">
+    <div class="section-title">Agent Activity</div>
+
+    <template x-if="agents.length === 0">
+      <div class="text-slate-600 text-sm text-center py-8">No active agents</div>
+    </template>
+
+    <template x-for="agent in agents" :key="agent.agent + agent.taskId">
+      <div class="card p-3 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="agent-dot" :class="`dot-${agent.status || 'idle'}`"></div>
+            <span class="text-sm font-semibold text-white" x-text="agentDisplayName(agent.agent)"></span>
+          </div>
+          <span class="pill" :class="`status-${agent.status || 'idle'}`" x-text="agent.status || 'idle'"></span>
+        </div>
+
+        <div class="text-xs text-slate-400 font-medium" x-text="agent.role || ''"></div>
+
+        <template x-if="agent.task">
+          <div class="text-xs text-slate-300 leading-relaxed" x-text="agent.task"></div>
+        </template>
+
+        <template x-if="agent.progress">
+          <div class="text-xs text-slate-500 italic" x-text="agent.progress"></div>
+        </template>
+
+        <template x-if="agent.blockers && agent.blockers !== 'null'">
+          <div class="flex items-start gap-1.5 bg-red-900/20 rounded p-2">
+            <svg class="w-3 h-3 text-red-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+            <span class="text-xs text-red-300" x-text="agent.blockers"></span>
+          </div>
+        </template>
+
+        <div class="text-xs text-slate-600 mt-1" x-text="'#' + agent.taskId"></div>
+      </div>
+    </template>
+
+    <!-- Commands feed -->
+    <div class="section-title mt-2">Recent Commands</div>
+    <template x-if="recentCommands.length === 0">
+      <div class="text-slate-600 text-sm text-center py-4">No commands yet</div>
+    </template>
+    <template x-for="cmd in recentCommands" :key="cmd.id">
+      <div class="card p-3">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-blue-400" x-text="cmd.type"></span>
+          <span class="pill" :class="cmd.status === 'pending' ? 'status-in_progress' : 'status-done'" x-text="cmd.status"></span>
+        </div>
+        <div class="text-xs text-slate-400" x-text="parsePayload(cmd.payload)"></div>
+        <div class="text-xs text-slate-600 mt-1" x-text="timeAgo(cmd.created_at)"></div>
+      </div>
+    </template>
+  </aside>
+
+  <!-- Right: Task Board -->
+  <main class="flex-1 overflow-hidden flex flex-col">
+    <!-- Filters -->
+    <div class="px-6 py-3 border-b border-slate-800 flex items-center gap-3 flex-wrap">
+      <div class="section-title mr-2">Tasks</div>
+      <template x-for="filter in filters" :key="filter.value">
+        <button
+          @click="activeFilter = filter.value"
+          :class="activeFilter === filter.value ? 'bg-blue-600 text-white border-blue-600' : 'btn-ghost'"
+          class="px-3 py-1 rounded-full text-xs font-semibold border border-transparent transition-all"
+          x-text="filter.label + (filter.value === 'all' ? ` (${tasks.length})` : ` (${tasks.filter(t=>t.status===filter.value).length})`)"
+        ></button>
+      </template>
+      <div class="ml-auto flex items-center gap-2">
+        <button @click="sendCommand()" class="btn-ghost text-xs flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+          Send Command
+        </button>
+      </div>
+    </div>
+
+    <!-- Task list -->
+    <div class="flex-1 overflow-y-auto px-6 py-4">
+      <template x-if="filteredTasks.length === 0">
+        <div class="flex flex-col items-center justify-center h-full text-slate-600 gap-3">
+          <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          <span class="text-sm">No tasks here yet</span>
+          <button @click="openModal()" class="btn-primary text-sm">Create first task</button>
+        </div>
+      </template>
+
+      <div
+        class="flex flex-col gap-2"
+        @dragover.prevent
+        @drop="onDrop($event)"
+      >
+        <template x-for="(task, idx) in filteredTasks" :key="task.id">
+          <div
+            class="card task-row px-4 py-3 flex items-center gap-4"
+            :class="dragOverId === task.id ? 'drag-over' : ''"
+            draggable="true"
+            @dragstart="onDragStart($event, task)"
+            @dragover.prevent="dragOverId = task.id"
+            @dragleave="dragOverId = null"
+            @drop.stop="onDropOnTask($event, task)"
+          >
+            <!-- Drag handle -->
+            <svg class="w-4 h-4 text-slate-700 flex-shrink-0 cursor-grab" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 6a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4zm8-12a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4z"/>
+            </svg>
+
+            <!-- Priority badge -->
+            <div class="text-xs text-slate-600 w-4 text-center font-mono" x-text="idx + 1"></div>
+
+            <!-- Type pill -->
+            <span class="pill flex-shrink-0" :class="`type-${task.type}`" x-text="task.type"></span>
+
+            <!-- Title + description -->
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-white truncate" x-text="task.title"></div>
+              <template x-if="task.description">
+                <div class="text-xs text-slate-500 truncate mt-0.5" x-text="task.description"></div>
+              </template>
+            </div>
+
+            <!-- PR link -->
+            <template x-if="task.pr_url">
+              <a :href="task.pr_url" target="_blank" class="flex-shrink-0 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                PR
+              </a>
+            </template>
+
+            <!-- Status pill -->
+            <span class="pill flex-shrink-0" :class="`status-${task.status}`" x-text="task.status"></span>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-1 flex-shrink-0">
+              <button @click.stop="openModal(task)" class="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              </button>
+              <button @click.stop="deleteTask(task.id)" class="p-1.5 rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-900/20 transition-all">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Create/Edit Task Modal -->
+<div x-show="modal.open" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/60" @click="modal.open = false"></div>
+  <div class="card relative w-full max-w-lg p-6 flex flex-col gap-4 z-10" style="border-color:#1e3a5f">
+    <div class="flex items-center justify-between">
+      <h2 class="text-white font-semibold" x-text="modal.task ? 'Edit Task' : 'New Task'"></h2>
+      <button @click="modal.open = false" class="text-slate-500 hover:text-white">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="flex flex-col gap-3">
+      <div>
+        <label class="text-xs text-slate-400 mb-1 block">Title *</label>
+        <input x-model="form.title" placeholder="e.g. Add OAuth login" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-400 mb-1 block">Type</label>
+          <select x-model="form.type">
+            <option value="feature">Feature</option>
+            <option value="bugfix">Bug Fix</option>
+            <option value="refactor">Refactor</option>
+            <option value="brainstorm">Brainstorm</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 mb-1 block">Status</label>
+          <select x-model="form.status">
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="review">Review</option>
+            <option value="done">Done</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs text-slate-400 mb-1 block">Description</label>
+        <textarea x-model="form.description" rows="3" placeholder="What needs to be done..."></textarea>
+      </div>
+
+      <div>
+        <label class="text-xs text-slate-400 mb-1 block">Notes</label>
+        <textarea x-model="form.notes" rows="2" placeholder="Additional context, links, constraints..."></textarea>
+      </div>
+
+      <template x-if="modal.task">
+        <div>
+          <label class="text-xs text-slate-400 mb-1 block">PR URL</label>
+          <input x-model="form.pr_url" placeholder="https://github.com/..." />
+        </div>
+      </template>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-1">
+      <button @click="modal.open = false" class="btn-ghost">Cancel</button>
+      <button @click="saveTask()" class="btn-primary" x-text="modal.task ? 'Save Changes' : 'Create Task'"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Command Modal -->
+<div x-show="cmdModal.open" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/60" @click="cmdModal.open = false"></div>
+  <div class="card relative w-full max-w-md p-6 flex flex-col gap-4 z-10" style="border-color:#1e3a5f">
+    <h2 class="text-white font-semibold">Send Command to Agent</h2>
+    <div>
+      <label class="text-xs text-slate-400 mb-1 block">Type</label>
+      <select x-model="cmdModal.type">
+        <option value="next_task">Next Task</option>
+        <option value="update_task">Update / Redo Something</option>
+        <option value="free_text">Free Text</option>
+      </select>
+    </div>
+    <div>
+      <label class="text-xs text-slate-400 mb-1 block">Message</label>
+      <textarea x-model="cmdModal.message" rows="3" placeholder="e.g. The error handling in auth is wrong, fix it"></textarea>
+    </div>
+    <div class="flex justify-end gap-2">
+      <button @click="cmdModal.open = false" class="btn-ghost">Cancel</button>
+      <button @click="submitCommand()" class="btn-primary">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<template x-if="toast.show">
+  <div class="toast flex items-center gap-3">
+    <div :class="toast.type === 'error' ? 'w-2 h-2 rounded-full bg-red-400' : 'w-2 h-2 rounded-full bg-green-400'"></div>
+    <span class="text-sm" x-text="toast.message"></span>
+  </div>
+</template>
+
+<script>
+function app() {
+  return {
+    tasks: [],
+    agents: [],
+    recentCommands: [],
+    connected: false,
+    activeFilter: 'all',
+    dragItem: null,
+    dragOverId: null,
+
+    modal: { open: false, task: null },
+    cmdModal: { open: false, type: 'next_task', message: '' },
+    form: {},
+    toast: { show: false, message: '', type: 'success' },
+
+    filters: [
+      { value: 'all',         label: 'All' },
+      { value: 'pending',     label: 'Pending' },
+      { value: 'in_progress', label: 'In Progress' },
+      { value: 'review',      label: 'Review' },
+      { value: 'done',        label: 'Done' },
+    ],
+
+    get filteredTasks() {
+      if (this.activeFilter === 'all') return this.tasks;
+      return this.tasks.filter(t => t.status === this.activeFilter);
+    },
+
+    get taskStats() {
+      return [
+        { label: 'Queue',       count: this.tasks.filter(t => t.status === 'pending').length },
+        { label: 'In Progress', count: this.tasks.filter(t => t.status === 'in_progress').length },
+        { label: 'Review',      count: this.tasks.filter(t => t.status === 'review').length },
+        { label: 'Done',        count: this.tasks.filter(t => t.status === 'done').length },
+      ];
+    },
+
+    init() {
+      this.loadCommands();
+      this.connectSSE();
+    },
+
+    connectSSE() {
+      const es = new EventSource('/api/events');
+      es.addEventListener('tasks',   e => { this.tasks = JSON.parse(e.data); });
+      es.addEventListener('agents',  e => { this.agents = JSON.parse(e.data); });
+      es.addEventListener('command', e => { this.loadCommands(); });
+      es.addEventListener('notify',  e => {
+        const d = JSON.parse(e.data);
+        this.showToast('📨 ' + d.message.slice(0, 80));
+      });
+      es.onopen  = () => { this.connected = true; };
+      es.onerror = () => {
+        this.connected = false;
+        setTimeout(() => this.connectSSE(), 3000);
+      };
+    },
+
+    async loadCommands() {
+      const res = await fetch('/api/commands?limit=5');
+      this.recentCommands = await res.json();
+    },
+
+    openModal(task = null) {
+      this.modal.task = task;
+      this.form = task
+        ? { title: task.title, description: task.description, type: task.type, status: task.status, notes: task.notes, pr_url: task.pr_url }
+        : { title: '', description: '', type: 'feature', status: 'pending', notes: '', pr_url: '' };
+      this.modal.open = true;
+    },
+
+    async saveTask() {
+      if (!this.form.title.trim()) return this.showToast('Title is required', 'error');
+      if (this.modal.task) {
+        await fetch(`/api/tasks/${this.modal.task.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.form),
+        });
+        this.showToast('Task updated');
+      } else {
+        await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.form),
+        });
+        this.showToast('Task created');
+      }
+      this.modal.open = false;
+    },
+
+    async deleteTask(id) {
+      if (!confirm('Delete this task?')) return;
+      await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+      this.showToast('Task deleted');
+    },
+
+    // Drag and drop reorder
+    onDragStart(e, task) {
+      this.dragItem = task;
+      e.dataTransfer.effectAllowed = 'move';
+    },
+    onDropOnTask(e, targetTask) {
+      if (!this.dragItem || this.dragItem.id === targetTask.id) return;
+      this.dragOverId = null;
+      const ids = [...this.tasks];
+      const fromIdx = ids.findIndex(t => t.id === this.dragItem.id);
+      const toIdx   = ids.findIndex(t => t.id === targetTask.id);
+      ids.splice(fromIdx, 1);
+      ids.splice(toIdx, 0, this.dragItem);
+      this.tasks = ids;
+      fetch('/api/tasks/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids.map(t => t.id) }),
+      });
+      this.dragItem = null;
+    },
+    onDrop(e) { this.dragItem = null; this.dragOverId = null; },
+
+    sendCommand() {
+      this.cmdModal.type = 'next_task';
+      this.cmdModal.message = '';
+      this.cmdModal.open = true;
+    },
+
+    async submitCommand() {
+      const payload = this.cmdModal.message ? { text: this.cmdModal.message } : {};
+      await fetch('/api/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: this.cmdModal.type, payload, source: 'web' }),
+      });
+      this.cmdModal.open = false;
+      this.loadCommands();
+      this.showToast('Command sent to agent queue');
+    },
+
+    agentDisplayName(id) {
+      const map = {
+        xavier: 'Xavier', holmes: 'Holmes', granger: 'Granger',
+        tesla: 'Tesla', anderson: 'Anderson', neumann: 'Neumann',
+        wayne: 'Wayne', potts: 'Potts', torvalds: 'Torvalds',
+        parker: 'Parker', barton: 'Barton', romanoff: 'Romanoff',
+      };
+      return map[id] || id;
+    },
+
+    parsePayload(raw) {
+      try {
+        const p = JSON.parse(raw);
+        return p.text || p.note || JSON.stringify(p);
+      } catch { return raw; }
+    },
+
+    timeAgo(dt) {
+      const diff = Date.now() - new Date(dt).getTime();
+      const m = Math.floor(diff / 60000);
+      if (m < 1)  return 'just now';
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      return `${Math.floor(h/24)}d ago`;
+    },
+
+    showToast(message, type = 'success') {
+      this.toast = { show: true, message, type };
+      setTimeout(() => { this.toast.show = false; }, 3500);
+    },
+  };
+}
+</script>
+</body>
+</html>

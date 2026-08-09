@@ -1,0 +1,68 @@
+# .e2e/profile.yml — how Kaizen does e2e: `contract` and `flow` tiers built,
+# `live` deferred — see docs/e2e/README.md §8/§10 for what's built vs. not.
+#
+# Kaizen is NOT scaffolded by agentkit/render.py (it's the source the kit
+# renders FROM, not a rendered project), so this file is hand-authored, not
+# pre-filled by `"e2e": true` the way a Warden-backed project's is.
+
+kit_version: 1
+
+env:
+  # Kaizen isn't a Warden-backed project — there's no `dind` sidecar to run
+  # against. The stack boots straight on whatever docker socket is already
+  # available (the same one `make up` uses).
+  mode: local
+  # The overlay keeps postgres's volume WARM across `make e2e-up`/`e2e-up-flow`
+  # runs (docs/e2e/README.md §8 — a full up/down per test costs minutes). Not
+  # per-run isolation: state accumulates until `boot.reset` below.
+  isolation: shared
+
+boot:
+  # `up`/`ready`/`down` cover BOTH tiers — flow is a superset overlay of
+  # contract (deploy/docker-compose.e2e-flow.yml layers on top of
+  # deploy/docker-compose.e2e.yml), so `e2e-down` always tears down whichever
+  # was actually brought up (found the hard way: an earlier version only knew
+  # about the contract-tier files and left flow's `fake-llm` running).
+  up:      "make e2e-up          # contract tier only\nmake e2e-up-flow     # contract + flow (adds fake-llm, creates+migrates the kaya DB)"
+  ready:   "curl -sf http://127.0.0.1:18772/health   # brain; flow tier also: curl -sf http://127.0.0.1:18790/health   # fake-llm"
+  timeout: 120
+  # Full clean slate — drops the warm volume too, unlike `boot.down`.
+  reset:   "docker compose --env-file .env.e2e.generated -f deploy/docker-compose.yml -f deploy/docker-compose.e2e.yml -f deploy/docker-compose.e2e-flow.yml down -v && make e2e-up-flow"
+  down:    "make e2e-down"
+
+run:
+  # Contract tier's own deps (httpx, pytest) are enough on their own; flow
+  # tier additionally needs the FULL app dependency set (requirements.txt —
+  # it imports agents.core/agents.kaya/sqlalchemy/aiogram directly) plus
+  # requirements-dev.txt for pytest itself. tests/e2e/conftest.py skips
+  # collecting flow/ entirely when those aren't installed, so running without
+  # them still runs contract tier cleanly rather than erroring.
+  all:       "pip install -r requirements.txt -r requirements-dev.txt && pytest tests/e2e/ -v"
+  one:       "pytest tests/e2e/{file}::{name} -v"
+  write_to:  "tests/e2e/ (contract) or tests/e2e/flow/ (flow)"
+  # Not built: no machine-readable report is wired up yet — pytest's own
+  # stdout summary is the only output today.
+  report:    "<not built — pytest -v stdout only>"
+  artifacts: "<not built — no log/trace capture beyond `docker compose logs`>"
+  on_fail:
+    - "docker compose --env-file .env.e2e.generated -f deploy/docker-compose.yml -f deploy/docker-compose.e2e.yml -f deploy/docker-compose.e2e-flow.yml logs --tail=200"
+
+needs:
+  - key:   "BRAIN_ADMIN_TOKEN"
+    where: "host-env"
+    why:   "mints a fresh agent + access rule per test (tests/e2e/conftest.py's agent_token fixture) — read from .env.e2e.generated, regenerated fresh by `make e2e-secrets`, never typed in by hand"
+  - key:   "ANTHROPIC_API_KEY"
+    where: "host-env"
+    why:   "flow tier only — constructs agents.core.llm.AnthropicClient against the fake LLM (infra/e2e/fake_llm.py never validates it); fixed dummy value in .env.e2e.generated.example, never a real key"
+
+boundary:
+  real:     ["postgres (pgvector)", "brain (MCP/HTTP front door, real access-list)", "tracker", "mentor", "tools", "agents.core.Agent + agents/kaya/connector.py (flow tier, unmodified, driven by the test process)"]
+  stubbed:  ["Anthropic Messages API (flow tier — infra/e2e/fake_llm.py, scripted responses)", "Telegram Bot API (flow tier — tests/e2e/fakes/fake_telegram.py's FakeSession)"]
+  external: []   # loopback only; nothing leaves the compose network except the published ports
+  # NOT exercised at all by flow tier (the honesty this section exists for):
+  # enrollment/approval (the harness authenticates with an admin-minted token,
+  # same as contract tier — see docs/e2e/README.md §10 item 6), the `kaya`
+  # container and agents/kaya/main.py's full boot wiring (locale/soul loading,
+  # SeenUpdatesMiddleware dedup, DefaultBotProperties HTML parse_mode, the
+  # delivery receiver), and the real soul/cliché files — the harness uses a
+  # one-line stub soul, not locales/*/soul.md.
