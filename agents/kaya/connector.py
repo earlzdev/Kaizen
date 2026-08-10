@@ -45,7 +45,14 @@ from typing import Any
 
 from aiogram import BaseMiddleware, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message, TelegramObject
+from aiogram.types import (
+    Message,
+    MessageOriginChannel,
+    MessageOriginChat,
+    MessageOriginHiddenUser,
+    MessageOriginUser,
+    TelegramObject,
+)
 
 from agents.core.agent import Agent
 from agents.kaya.config import settings
@@ -192,6 +199,45 @@ def _status_line(tool: str, detail: str) -> str | None:
     return status_line(settings.kaya_language, tool, detail)
 
 
+_REPLY_SNIPPET_MAX = 300
+
+
+def _forward_sender_label(message: Message) -> str | None:
+    """A human-readable "who this was originally from" for a forwarded
+    message, or None if it isn't a forward. Covers all four MessageOrigin
+    variants (Bot API 7.0+ / aiogram 3.4+)."""
+    origin = message.forward_origin
+    if origin is None:
+        return None
+    if isinstance(origin, MessageOriginUser):
+        return origin.sender_user.full_name
+    if isinstance(origin, MessageOriginHiddenUser):
+        return origin.sender_user_name
+    if isinstance(origin, MessageOriginChat):
+        return origin.sender_chat.title or origin.author_signature or "?"
+    if isinstance(origin, MessageOriginChannel):
+        return origin.chat.title or origin.author_signature or "?"
+    return "?"
+
+
+def _reply_snippet(replied: Message, language: str) -> str:
+    """A short description of the message someone replied to — its own text
+    if it has one (collapsed to one line, truncated), otherwise a localized
+    placeholder for the media type (we don't re-download/re-transcribe just
+    to build a label)."""
+    snippet = replied.text or replied.caption
+    if snippet:
+        snippet = " ".join(snippet.split())
+        if len(snippet) > _REPLY_SNIPPET_MAX:
+            snippet = snippet[:_REPLY_SNIPPET_MAX] + "…"
+        return snippet
+    if replied.voice:
+        return t(language, "reply_placeholder_voice")
+    if replied.photo:
+        return t(language, "reply_placeholder_photo")
+    return t(language, "reply_placeholder_generic")
+
+
 async def _extract_text(message: Message, stt: SpeechKit) -> str | None:
     """One incoming Telegram message -> the text the agent should see (voice
     transcribed, photos saved and referenced by path). None = nothing usable;
@@ -218,6 +264,19 @@ async def _extract_text(message: Message, stt: SpeechKit) -> str | None:
     if not text:
         await message.answer(t(settings.kaya_language, "unsupported_message"))
         return None
+    # Reply/forward context is provenance about the WHOLE message, so it goes
+    # in front of whatever content was assembled above (text/voice/photo).
+    if message.reply_to_message:
+        reply_note = t(
+            settings.kaya_language,
+            "reply_note",
+            snippet=_reply_snippet(message.reply_to_message, settings.kaya_language),
+        )
+        text = f"{reply_note}\n{text}"
+    sender = _forward_sender_label(message)
+    if sender:
+        forward_note = t(settings.kaya_language, "forward_note", sender=sender)
+        text = f"{forward_note}\n{text}"
     return text
 
 

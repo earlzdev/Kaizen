@@ -14,6 +14,12 @@ here — this file is for what changed about how she acts or what she can do.
 
 ## 2026-08-10
 
+- Кая now sees reply/forward context: replying to a message prepends a
+  `[Replying to: "..."]` note with the original snippet, and a forwarded
+  message prepends `[Forwarded message from <sender>]:` — same bracketed-note
+  pattern already used for voice/photo (`agents/kaya/connector.py`
+  `_extract_text`). Previously that Telegram context was silently dropped and
+  the agent only saw the new caption/text, if any.
 - Added «по-честному» to the shared cliché ban list (`agents/core/locales/ru/cliches.json`,
   «Мета-разговор о себе» section) — same declared-sincerity slop class as
   «сразу честно». Applies to all agents using this list, not just Кая.
