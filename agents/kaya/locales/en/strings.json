@@ -7,6 +7,8 @@
   "voice_transcript_label": "[Voice message, transcribed]: {transcript}",
   "photo_download_failed": "Couldn't download that photo, mind trying again?",
   "photo_note": "[The owner sent a photo. File: {path} — open it (Read) and look before answering.]",
+  "reply_note": "[Replying to: \"{snippet}\"]",
+  "forward_note": "[Forwarded message from {sender}]:",
   "unsupported_message": "Right now I can only handle text, photos, and voice messages.",
   "turn_crashed": "Oops, something broke on my end for that message. Mind trying again?",
   "reminder_prefix": "⏰ Reminder: ",
