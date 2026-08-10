@@ -216,24 +216,26 @@ def _forward_sender_label(message: Message) -> str | None:
     if isinstance(origin, MessageOriginChat):
         return origin.sender_chat.title or origin.author_signature or "?"
     if isinstance(origin, MessageOriginChannel):
-        return origin.chat.title
+        return origin.chat.title or origin.author_signature or "?"
     return "?"
 
 
-def _reply_snippet(replied: Message) -> str:
+def _reply_snippet(replied: Message, language: str) -> str:
     """A short description of the message someone replied to — its own text
-    if it has one (truncated), otherwise a generic placeholder for the media
-    type (we don't re-download/re-transcribe just to build a label)."""
+    if it has one (collapsed to one line, truncated), otherwise a localized
+    placeholder for the media type (we don't re-download/re-transcribe just
+    to build a label)."""
     snippet = replied.text or replied.caption
     if snippet:
+        snippet = " ".join(snippet.split())
         if len(snippet) > _REPLY_SNIPPET_MAX:
             snippet = snippet[:_REPLY_SNIPPET_MAX] + "…"
         return snippet
     if replied.voice:
-        return "a voice message"
+        return t(language, "reply_placeholder_voice")
     if replied.photo:
-        return "a photo message"
-    return "a message"
+        return t(language, "reply_placeholder_photo")
+    return t(language, "reply_placeholder_generic")
 
 
 async def _extract_text(message: Message, stt: SpeechKit) -> str | None:
@@ -266,7 +268,9 @@ async def _extract_text(message: Message, stt: SpeechKit) -> str | None:
     # in front of whatever content was assembled above (text/voice/photo).
     if message.reply_to_message:
         reply_note = t(
-            settings.kaya_language, "reply_note", snippet=_reply_snippet(message.reply_to_message)
+            settings.kaya_language,
+            "reply_note",
+            snippet=_reply_snippet(message.reply_to_message, settings.kaya_language),
         )
         text = f"{reply_note}\n{text}"
     sender = _forward_sender_label(message)

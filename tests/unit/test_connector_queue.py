@@ -48,6 +48,8 @@ class FakeMessage:
         self.caption = None
         self.voice = None
         self.photo = None
+        self.reply_to_message = None
+        self.forward_origin = None
         self.chat = SimpleNamespace(id=CHAT_ID)
         self.bot = bot
         self.answers = []
