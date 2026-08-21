@@ -21,6 +21,8 @@
 import logging
 import re
 
+from tools.shared.browser import CHALLENGE_BLOCKED
+
 logger = logging.getLogger(__name__)
 
 # City (lowercase Russian name) → Yandex Maps geo-id + latin slug. The geo-id is
@@ -111,7 +113,7 @@ class TrafficService:
         url = f"https://yandex.ru/maps/{geo_id}/{slug}/?l=trf"
 
         text = await self._browser.render(url)
-        if not text:
+        if not text or text == CHALLENGE_BLOCKED:
             return None
         m = _SCORE_RE.search(text)
         if not m:

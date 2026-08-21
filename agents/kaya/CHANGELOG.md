@@ -12,6 +12,24 @@ here — this file is for what changed about how she acts or what she can do.
 > than translated. If you need the untranslated, unpruned original, it's in
 > this repo's git history before that date.
 
+## 2026-08-21
+
+- Cliché map: banned the false-contrast tic «это не X, а Y» when X and Y
+  aren't actual opposites (`agents/core/locales/ru/cliches.json`, new
+  section) — owner flagged it as an obvious AI tell she was overusing on
+  unrelated pairs. Also widened the «честно» ban from just «по-честному»/
+  «честный расклад» to bare «если честно»/«честно говоря» as a filler.
+  Applies to every Russian-language agent using this list, not just Кая
+  (English map unchanged — the tic is Russian-specific phrasing).
+- Fact-verification self-check now singles out numbers (price, area,
+  distance, time, rating, count): a number must trace back to a page opened
+  that turn or it gets cut, never rounded/guessed/recalled "from memory"
+  (`agents/core/prompts.py` `VERIFY_REQUEST_TEMPLATE` + `SEARCH_PROTOCOL`).
+  Owner caught her stating a fabricated area and travel time as fact, then
+  walking it back unprompted next message — the old gate re-checked drafts
+  with the same model that invented the number, so it didn't catch this
+  class of error.
+
 ## 2026-08-10
 
 - Кая now sees reply/forward context: replying to a message prepends a

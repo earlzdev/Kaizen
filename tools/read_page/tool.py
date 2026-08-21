@@ -12,7 +12,7 @@
 # =============================================================================
 
 from tools.contract import ToolDef
-from tools.shared.browser import BrowserService
+from tools.shared.browser import CHALLENGE_BLOCKED, BrowserService
 
 # Cap the text handed back so a tool result stays prompt-sized.
 _MAX_TEXT = 12_000
@@ -22,6 +22,8 @@ _browser = BrowserService()
 
 async def read_page(url: str) -> str:
     text = await _browser.render(url)
+    if text == CHALLENGE_BLOCKED:
+        return "Error: this site blocked the request with a bot-check page — say so plainly, don't invent an answer."
     if not text:
         return "Error: couldn't render that page (browser unavailable or the page failed)."
     return text[:_MAX_TEXT]

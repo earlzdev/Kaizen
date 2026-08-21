@@ -30,7 +30,7 @@ import re
 import urllib.parse
 
 from tools.contract import ToolDef
-from tools.shared.browser import BrowserService
+from tools.shared.browser import CHALLENGE_BLOCKED, BrowserService
 
 _browser = BrowserService()
 
@@ -76,6 +76,8 @@ async def route_time(from_place: str, to_place: str, mode: str = "car", language
     url = f"https://yandex.ru/maps/?rtext={rtext}&rtt={_MODES[mode]}"
 
     text = await _browser.render(url)
+    if text == CHALLENGE_BLOCKED:
+        return "Error: Yandex Maps blocked the request with a bot-check page — say so plainly, don't invent a route."
     if not text:
         return "Error: couldn't load the route (browser unavailable or Yandex Maps failed)."
     durations = _durations(text, language)

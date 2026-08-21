@@ -11,6 +11,20 @@ tuning) belongs in the commit message, not here.
 Starts empty on 2026-08-07 (the file itself is new); history before that is
 in `git log -- tools/`.
 
+## 2026-08-21
+
+- `read_page`'s headless browser (`tools/shared/browser.py`) now patches the
+  cheap bot-detection tells (`navigator.webdriver`, plugins, languages) and,
+  if a page still comes back as a "checking your browser"/"just a moment"
+  interstitial, waits and retries once before giving up — clears the easy
+  Cloudflare/bot-wall checks that plain headless Chromium tripped on sites
+  like avito.ru/cian.ru/drive2.ru, though not a guarantee against deeper
+  fingerprinting. A single render is now hard-capped at 10s regardless of
+  the `browser_timeout_seconds` setting, to stay well inside the caller
+  chain's own deadlines. A page still blocked after the retry now returns a
+  distinct "blocked by a bot-check page" message instead of a generic
+  render-failure one.
+
 ## 2026-08-09
 
 - New `deploy` tool: lets Кая open (and, only when explicitly told, merge)
