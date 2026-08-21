@@ -55,6 +55,14 @@ from brain.registry import Tool, ToolRegistry
 
 logger = logging.getLogger(__name__)
 
+# Tools backed by the headless-browser service (tools/shared/browser.py) can
+# legitimately run past the default fast-fail gRPC deadline (a render plus a
+# bot-wall retry) — give them a longer one. Stays under the agent's own
+# 30s MCP call cap (agents/core/mcp_client.py) so a slow render still fails
+# there rather than just moving the hang one hop over.
+_LONG_TIMEOUT_TOOLS = {"read_page", "route_time", "traffic_score"}
+_LONG_TIMEOUT_SECONDS = 25.0
+
 
 class ModuleRouter:
     """Registers configured modules' tools as gRPC-proxy tools, with retry."""
@@ -178,10 +186,12 @@ class ModuleRouter:
         """Build the handler that proxies this tool to its module over gRPC."""
         client = self._client
 
+        timeout = _LONG_TIMEOUT_SECONDS if tool_name in _LONG_TIMEOUT_TOOLS else None
+
         async def proxy(**arguments) -> ToolResult:
             args_json = json.dumps(arguments)
             content, is_error = await client.call_tool(
-                addr, tool_name, args_json, actor_slug()
+                addr, tool_name, args_json, actor_slug(), timeout=timeout
             )
             # The gRPC bool rides through structurally — no prefix folding.
             return ToolResult(text=content, is_error=is_error)

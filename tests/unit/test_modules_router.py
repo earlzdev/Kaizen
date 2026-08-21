@@ -36,6 +36,7 @@ class FakeModuleClient:
         self._tools = tools_by_addr
         self.down = set(down)
         self.register_calls = []
+        self.call_timeouts = []
 
     async def register_tools(self, addr):
         self.register_calls.append(addr)
@@ -43,7 +44,8 @@ class FakeModuleClient:
             raise ConnectionError(f"unreachable {addr}")
         return self._tools[addr]
 
-    async def call_tool(self, addr, name, args_json, agent_id):
+    async def call_tool(self, addr, name, args_json, agent_id, *, timeout=None):
+        self.call_timeouts.append((name, timeout))
         return f"ran {name}", False
 
 
@@ -163,6 +165,15 @@ async def test_registered_proxy_forwards_to_the_module():
     await ModuleRouter([("mentor", "m:1")], client).register_into(registry)
     result = await registry.execute("a", {"x": 1})
     assert (result.text, result.is_error) == ("ran a", False)
+
+
+async def test_browser_backed_tools_get_the_long_timeout():
+    client = FakeModuleClient({"t:1": [spec("read_page"), spec("mentor_search")]})
+    registry = ToolRegistry()
+    await ModuleRouter([("tools", "t:1")], client).register_into(registry)
+    await registry.execute("read_page", {})
+    await registry.execute("mentor_search", {})
+    assert dict(client.call_timeouts) == {"read_page": 25.0, "mentor_search": None}
 
 
 def test_parse_modules_happy_and_malformed():

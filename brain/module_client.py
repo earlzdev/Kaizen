@@ -56,15 +56,25 @@ class ModuleClient:
             return list(reply.tools)
 
     async def call_tool(
-        self, addr: str, name: str, arguments_json: str, agent_id: str
+        self,
+        addr: str,
+        name: str,
+        arguments_json: str,
+        agent_id: str,
+        *,
+        timeout: float | None = None,
     ) -> tuple[str, bool]:
-        """Run a tool on a module -> (content, is_error)."""
+        """Run a tool on a module -> (content, is_error).
+
+        `timeout` overrides the instance default for this one call — some
+        tools (e.g. the headless-browser ones) legitimately need longer than
+        the default fast-fail deadline; most tools should never need this."""
         async with grpc.aio.insecure_channel(addr) as channel:
             stub = module_pb2_grpc.ModuleStub(channel)
             reply = await stub.CallTool(
                 module_pb2.CallToolRequest(
                     name=name, arguments_json=arguments_json, agent_id=agent_id
                 ),
-                timeout=self._timeout,
+                timeout=timeout if timeout is not None else self._timeout,
             )
             return reply.content, reply.is_error

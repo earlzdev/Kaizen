@@ -9,6 +9,15 @@ Brain does or how agents/modules experience it.
 
 Created 2026-08-07; history before that is in `git log -- brain/`.
 
+## 2026-08-21
+
+- Headless-browser tools (`read_page`, `route_time`, `traffic_score`) now get
+  a 25s module-call deadline instead of the default 10s (`brain/modules.py`
+  `_LONG_TIMEOUT_TOOLS`, `ModuleClient.call_tool`'s new per-call `timeout`)
+  — a render plus a bot-wall retry legitimately needs longer than a normal
+  tool call, and the old 10s cut it off before it could ever return. Every
+  other module tool keeps the fast 10s fail.
+
 ## 2026-08-09
 
 - New `save_note`/`list_notes`/`search_notes`/`list_note_categories`/
